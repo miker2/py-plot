@@ -8,6 +8,7 @@ class dataItem(object):
     def __init__(self, var_name, data):
         self._var_name = var_name
         self._data = data
+        self._time = None
 
     @property
     def var_name(self):
@@ -16,6 +17,10 @@ class dataItem(object):
     @property
     def data(self):
         return self._data
+
+    @property
+    def time(self):
+        return self._time
 
     def __repr__(self):
         return self._var_name

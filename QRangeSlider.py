@@ -53,7 +53,7 @@ def scale(val, src, dst):
     """
     Scale the given value from the scale of src to the scale of dst.
     """
-    return int(((val - src[0]) / float(src[1]-src[0])) * (dst[1]-dst[0]) + dst[0])
+    return (((val - src[0]) / float(src[1]-src[0])) * (dst[1]-dst[0]) + dst[0])
 
 
 class Ui_Form(object):
@@ -165,11 +165,9 @@ class Handle(Element):
             dx = 0
         else:
             dx = mx - _mx
+
         dx *= step
-        if -1 < dx < 1:
-            event.ignore()
-            return
-        dx = round(dx)
+
         setattr(self, '__mx', mx)
 
         s = self.main.start() + dx
@@ -188,22 +186,22 @@ class QRangeSlider(QWidget, Ui_Form):
     Methods
         * __init__ (self, QWidget parent = None)
         * bool drawValues (self)
-        * int end (self)
-        * (int, int) getRange (self)
-        * int max (self)
-        * int min (self)
-        * int start (self)
+        * float end (self)
+        * (float, float) getRange (self)
+        * float max (self)
+        * float min (self)
+        * float start (self)
         * setBackgroundStyle (self, QString styleSheet)
         * setDrawValues (self, bool draw)
-        * setEnd (self, int end)
-        * setStart (self, int start)
-        * setRange (self, int start, int end)
+        * setEnd (self, float end)
+        * setStart (self, float start)
+        * setRange (self, float start, float end)
         * setSpanStyle (self, QString styleSheet)
     Signals
-        * endValueChanged (int)
-        * maxValueChanged (int)
-        * minValueChanged (int)
-        * startValueChanged (int)
+        * endValueChanged (float)
+        * maxValueChanged (float)
+        * minValueChanged (float)
+        * startValueChanged (float)
     Customizing QRangeSlider
     You can style the range slider as below:
     ::
@@ -236,10 +234,10 @@ class QRangeSlider(QWidget, Ui_Form):
         }
 
     """
-    endValueChanged = QtCore.pyqtSignal(int)
-    maxValueChanged = QtCore.pyqtSignal(int)
-    minValueChanged = QtCore.pyqtSignal(int)
-    startValueChanged = QtCore.pyqtSignal(int)
+    endValueChanged = QtCore.pyqtSignal(float)
+    maxValueChanged = QtCore.pyqtSignal(float)
+    minValueChanged = QtCore.pyqtSignal(float)
+    startValueChanged = QtCore.pyqtSignal(float)
 
     # define splitter indices
     _SPLIT_START = 1
@@ -284,10 +282,10 @@ class QRangeSlider(QWidget, Ui_Form):
         self._tail_layout.addWidget(self.tail)
 
         # defaults
-        self.setMin(0)
-        self.setMax(99)
-        self.setStart(0)
-        self.setEnd(99)
+        self.setMin(0.)
+        self.setMax(99.)
+        self.setStart(0.)
+        self.setEnd(99.)
         #self.setDrawValues(True)
         self.setDrawValues(False)
 
@@ -301,13 +299,13 @@ class QRangeSlider(QWidget, Ui_Form):
 
     def setMin(self, value):
         """sets minimum value"""
-        assert type(value) is int
+        assert type(value) is float
         setattr(self, '__min', value)
         self.minValueChanged.emit(value)
 
     def setMax(self, value):
         """sets maximum value"""
-        assert type(value) is int
+        assert type(value) is float
         setattr(self, '__max', value)
         self.maxValueChanged.emit(value)
 
@@ -326,7 +324,7 @@ class QRangeSlider(QWidget, Ui_Form):
 
     def setStart(self, value):
         """sets the range slider start value"""
-        assert type(value) is int
+        assert type(value) is float
         v = self._valueToPos(value)
         self._splitter.splitterMoved.disconnect()
         self._splitter.moveSplitter(v, self._SPLIT_START)
@@ -340,7 +338,7 @@ class QRangeSlider(QWidget, Ui_Form):
 
     def setEnd(self, value):
         """set the range slider end value"""
-        assert type(value) is int
+        assert type(value) is float
         v = self._valueToPos(value)
         self._splitter.splitterMoved.disconnect()
         self._splitter.moveSplitter(v, self._SPLIT_END)
@@ -392,7 +390,7 @@ class QRangeSlider(QWidget, Ui_Form):
 
     def _valueToPos(self, value):
         """converts slider value to local pixel x coord"""
-        return scale(value, (self.min(), self.max()), (0, self.width()))
+        return int(scale(value, (self.min(), self.max()), (0, self.width())))
 
     def _posToValue(self, xpos):
         """converts local pixel x coord to slider value"""

@@ -9,6 +9,7 @@ from dataFileWidget import dataFileWidget
 from subPlotWidget import subPlotWidget
 from QRangeSlider import QRangeSlider
 from QxtSpanSlider import QxtSpanSlider
+from plotManager import plotManager
 
 import pyqtgraph as pg
 
@@ -23,14 +24,12 @@ class PlotTool(QMainWindow):
         self.setWindowTitle("Data Analyzer")
         self.setObjectName("PlotTool")
 
-        self.setup_menu()
-
         qSplitter = QSplitter(self)
         qSplitter.setObjectName("qSplitter")
         qSplitter.setHandleWidth(10)  # Make the handle a bit bigger
         self.setCentralWidget(qSplitter)
 
-        self.data_file_widget = dataFileWidget()
+        self.data_file_widget = dataFileWidget(self)
         qSplitter.addWidget(self.data_file_widget)
 
         plotAreaWidget = QWidget(self)
@@ -39,13 +38,17 @@ class PlotTool(QMainWindow):
 
         self.plotAreaLayout = QVBoxLayout(plotAreaWidget)
         self.plotAreaLayout.setObjectName("plotAreaLayout")
-        # plotAreaWidget.setLayout(plotAreaLayout)
 
         rs = QRangeSlider()
         rs.show()
-        rs.setMin(0)
-        rs.setMax(2**10)
+        rs.setMin(0.)
+        rs.setMax(1000.)  # large number here is sort of a hack for now so the plot x-axis resizes properly on the first file load.
         rs.setRange(rs.min(), rs.max())
+        self._range_slider = rs
+        rs.startValueChanged.connect(self.update_plot_xrange)
+        rs.endValueChanged.connect(self.update_plot_xrange)
+        rs.minValueChanged.connect(self.update_plot_xlimits)
+        rs.maxValueChanged.connect(self.update_plot_xlimits)
         #rs.setBackgroundStyle('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #222, stop:1 #333);')
         #rs.handle.setStyleSheet('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #282, stop:1 #393);')
         self.plotAreaLayout.addWidget(rs)
@@ -55,16 +58,14 @@ class PlotTool(QMainWindow):
         #qxtss.setSpan(10, 70)
         #plotAreaLayout.addWidget(qxtss)
 
-        self.subplots = []
-        subPlot1 = subPlotWidget()
-        self.plotAreaLayout.addWidget(subPlot1)
-        self.subplots.append(subPlot1)
+        self.plot_manager = plotManager(self.plotAreaLayout)
+        self.plot_manager.addSubplot()
+        self.plot_manager.addSubplot()
 
-        subPlot2 = subPlotWidget(500000)
-        self.plotAreaLayout.addWidget(subPlot2)
-        self.subplots.append(subPlot2)
+        # Depends on plot_manager, so needs to be created near the end.
+        self.setupMainMenu()
 
-    def setup_menu(self):
+    def setupMainMenu(self):
         openAction = QtWidgets.QAction("&Open ...", self)
         openAction.setShortcut("Ctrl+O")
         openAction.setStatusTip("Open a data file")
@@ -86,7 +87,7 @@ class PlotTool(QMainWindow):
         addPlotAction = QtWidgets.QAction("add subplot", self)
         addPlotAction.setShortcut("Ctrl+n")
         addPlotAction.setStatusTip('Add new subplot')
-        addPlotAction.triggered.connect(self.add_subplot)
+        addPlotAction.triggered.connect(self.plot_manager.addSubplot)
 
         plotMenu = mainMenu.addMenu('&Plot')
         plotMenu.addAction(addPlotAction)
@@ -104,10 +105,24 @@ class PlotTool(QMainWindow):
             self.statusBar().showMessage(f"Opening {fname}", 5000)
             self.data_file_widget.open_file(fname)
 
-    def add_subplot(self):
-        subPlot = subPlotWidget(500000)
-        self.plotAreaLayout.addWidget(subPlot)
-        self.subplots.append(subPlot)
+    def update_slider_limits(self, t_min, t_max):
+        self._range_slider.setMin(t_min)
+        self._range_slider.setMax(t_max)
+        if self._range_slider.min() > self._range_slider.start():
+            self._range_slider.setStart(t_min)
+        if self._range_slider.max() < self._range_slider.end():
+            self._range_slider.setEnd(t_max)
+
+        #print(f"slider - min: {self._range_slider.min()}, start: {self._range_slider.start()}, " +
+        #      f"max: {self._range_slider.max()}, end: {self._range_slider.end()}")
+
+    def update_plot_xrange(self, val):
+        #print(f"Value: {val}, start: start: {self._range_slider.start()}, end: {self._range_slider.end()}")
+        self.plot_manager.updateXRange(xmin=self._range_slider.start(), xmax=self._range_slider.end())
+
+    def update_plot_xlimits(self, val):
+        #print(f"Value: {val}, start: start: {self._range_slider.start()}, end: {self._range_slider.end()}")
+        self.plot_manager.updateXLimits(xmin=self._range_slider.min(), xmax=self._range_slider.max())
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)

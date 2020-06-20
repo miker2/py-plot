@@ -22,6 +22,10 @@ class varListWidget(QtWidgets.QListView):
 
         self.setDragEnabled(True)
 
+    @property
+    def time_range(self):
+        return self.model().time_range
+
     def item_clicked(self, index):
         QtGui.QMessageBox.information(self, "ListWidget",
                                       f"You clicked item {index.row()}: {index.data()}\n"
@@ -41,7 +45,7 @@ class varListWidget(QtWidgets.QListView):
             return
 
         selected = self.model().data(index, QtCore.Qt.UserRole)
-
+        selected._time = self.model().time
         bstream = pickle.dumps(selected)
         mimeData = QtCore.QMimeData()
         mimeData.setData("application/x-dataItem", bstream)
