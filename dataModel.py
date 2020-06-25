@@ -9,8 +9,31 @@ except:
     from PyQt5 import QtWidgets
 
 import pandas as pd
-    
-from dataItem import *
+
+class DataItem(object):
+    '''
+        Data structure for storing data items in the list widget
+    '''
+    def __init__(self, var_name, data):
+        self._var_name = var_name
+        self._data = data
+        self._time = None
+
+    @property
+    def var_name(self):
+        return self._var_name
+
+    @property
+    def data(self):
+        return self._data
+
+    @property
+    def time(self):
+        return self._time
+
+    def __repr__(self):
+        return self._var_name
+
 
 class dataModel(QtCore.QAbstractListModel):
     def __init__(self, filename, parent=None):
@@ -23,7 +46,7 @@ class dataModel(QtCore.QAbstractListModel):
         data = pd.read_csv(filename)
         self._data = []
         for var in sorted(data.columns):
-            self._data.append(dataItem(var, data[var]))
+            self._data.append(DataItem(var, data[var]))
 
         self._time = data['time']
         self._t_min = min(data['time'])

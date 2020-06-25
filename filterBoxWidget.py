@@ -1,44 +1,72 @@
 # This Python file uses the following encoding: utf-8
 # from PyQt5 import QtCore
 from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QCheckBox
+from PyQt5 import QtCore
+from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QLineEdit, QPushButton, QCheckBox
 
 
 class filterBoxWidget(QtWidgets.QWidget):
-    def __init__(self):
+    def __init__(self, df_widget):
         QtWidgets.QWidget.__init__(self)
 
-        layout = QHBoxLayout(self)
+        self.df_widget = df_widget
+
+        layout = QVBoxLayout(self)
 
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText('Search for variables here...')
+        self.search_box.setPlaceholderText('Search for variables here (eg. *FL*)')
+        self.search_box.returnPressed.connect(self.searchList)
+        layout.addWidget(self.search_box)
+
+        hlayout = QHBoxLayout()
 
         self.search_button = QPushButton("Search")
+        self.search_button.clicked.connect(self.searchList)
 
         clear_button = QPushButton("clear")
         clear_button.setSizePolicy(QtWidgets.QSizePolicy.Minimum,
                                    QtWidgets.QSizePolicy.Fixed)
 
-        clear_button.clicked.connect(self.clear_text)
+        clear_button.clicked.connect(self.clearText)
 
+        self.filter_box = QCheckBox("RegExp")
 
-        # self.filter_box = QCheckBox("filter")
-        # self.filter_box.stateChanged.connect(self.filter_list)
+        hlayout.addWidget(self.search_button)
+        hlayout.addWidget(clear_button)
+        hlayout.addWidget(self.filter_box)
 
-        layout.addWidget(self.search_box)
-        layout.addWidget(self.search_button)
-        layout.addWidget(clear_button)
-        # layout.addWidget(self.filter_box)
+        layout.addLayout(hlayout)
 
+        # print(f"search button size: {self.search_button.size()}")
+        # print(f"search button min size: {self.search_button.minimumSizeHint()}")
 
-        print(f"search button size: {self.search_button.size()}")
-        print(f"search button min size: {self.search_button.minimumSizeHint()}")
+    def searchList(self):
+        if self.df_widget.count() > 0 and self.search_box.text():
+            #print(f"Active tab is {self.df_widget.currentWidget().filename}")
 
-    def clear_text(self):
+            list_view = self.df_widget.currentWidget()
+            model = list_view.model()
+
+            selected = list_view.currentIndex()
+            if not selected.isValid():
+                # start at the beginning of the list
+                selected = model.index(0)
+            flags = QtCore.Qt.MatchWrap
+            if self.filter_box.isChecked() :
+                flags = flags | QtCore.Qt.MatchRegExp
+            else:
+                flags = flags | QtCore.Qt.MatchWildcard
+
+            # Probably a bit more of an elegant way to do this, but because "match" might return
+            # the "currentIndex" (if it matches) then we request 2 hits. If the first hit is the
+            # current index, we skip it and take the 2nd one.
+            matches = model.match(selected, QtCore.Qt.DisplayRole,
+                self.search_box.text(), hits=2, flags=flags)
+            if matches:
+                for m in matches:
+                    if m != list_view.currentIndex():
+                        self.df_widget.currentWidget().setCurrentIndex(m)
+                        break
+
+    def clearText(self):
         self.search_box.clear()
-
-    def filter_list(self):
-        print(f"Filter button state: {self.filter_box.isChecked()}")
-
-    # Need to connect the "search" button to the list that will be passed
-    # into this guy.

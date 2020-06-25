@@ -8,7 +8,7 @@ import pyqtgraph as pg
 
 import pickle
 import numpy as np
-from dataItem import *
+from dataModel import DataItem
 
 
 class subPlotWidget(QWidget):
@@ -39,7 +39,7 @@ class subPlotWidget(QWidget):
         self.pw.setMouseEnabled(x=False)
         self.pw.setClipToView(True)  # Only draw items in range
 
-        self.cursor = pg.InfiniteLine(pos=0, movable=True, pen='r')
+        self.cursor = pg.InfiniteLine(pos=0, movable=False, pen='r')
         self.pw.addItem(self.cursor)
 
         self.cidx = 0
@@ -49,6 +49,15 @@ class subPlotWidget(QWidget):
         # that way.
         self.pw.getPlotItem().setMenuEnabled(enableMenu=False, enableViewBoxMenu=None)
         self.pw.getViewBox().menu = self.contextMenu()
+
+    def setCursor(self, tick):
+        self.cursor.setValue(tick / 500.)
+
+    def setXLimitMin(self, xmin):
+        self.pw.setLimits(xMin=xmin)
+
+    def setXLimitMax(self, xmax):
+        self.pw.setLimits(xMax=xmax)
 
     def contextMenu(self):
         menu = QtWidgets.QMenu()
@@ -63,20 +72,20 @@ class subPlotWidget(QWidget):
         menu.addAction(deleteSubplotAction)
         menu.addSeparator()
         clearPlotAction = QtWidgets.QAction("Clear plot", self.pw.getViewBox())
-        clearPlotAction.triggered.connect(self.pw.clear)
+        clearPlotAction.triggered.connect(self.clearPlot)
         menu.addAction(clearPlotAction)
 
         return menu
 
     def dragEnterEvent(self, e):
-        if e.mimeData().hasFormat("application/x-dataItem"):
+        if e.mimeData().hasFormat("application/x-DataItem"):
             e.accept()
         else:
             e.ignore()
 
     def dropEvent(self, e):
         data = e.mimeData()
-        bstream = data.retrieveData("application/x-dataItem", QtCore.QVariant.ByteArray)
+        bstream = data.retrieveData("application/x-DataItem", QtCore.QVariant.ByteArray)
         selected = pickle.loads(bstream)
 
         self.pw.getPlotItem().plot(x=selected.time,
@@ -88,3 +97,12 @@ class subPlotWidget(QWidget):
         self.cidx = (self.cidx + 1) % len(subPlotWidget.COLORS)
         e.accept()
 
+    def clearPlot(self):
+        # HAX!!! Save the cursor!
+        x = self.cursor.value()
+        self.pw.clear()
+        # Replace the cursor. Such a hack
+        self.cursor = pg.InfiniteLine(pos=x, movable=False, pen='r')
+        self.pw.addItem(self.cursor)
+
+        self.cidx = 0

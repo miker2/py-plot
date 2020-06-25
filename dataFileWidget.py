@@ -7,11 +7,6 @@ from varListWidget import varListWidget
 
 import math
 
-# TODO(rose@)(2020/05/09) On file load, the end time of the log needs to be
-# collected. The maximum of the end times of all files loaded need to be used
-# to set the max value of the range slider so that it accurately reflects
-# the time range available.
-
 class dataFileWidget(QtWidgets.QWidget):
     def __init__(self, parent):
         QtWidgets.QWidget.__init__(self)
@@ -21,13 +16,13 @@ class dataFileWidget(QtWidgets.QWidget):
 
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
-        self.tabs.tabCloseRequested.connect(self.close_file)
+        self.tabs.tabCloseRequested.connect(self.closeFile)
         layout.addWidget(self.tabs)
 
-        self.filter_box = filterBoxWidget()
+        self.filter_box = filterBoxWidget(self.tabs)
         layout.addWidget(self.filter_box)
 
-    def open_file(self, filepath):
+    def openFile(self, filepath):
         var_list = varListWidget(self, filepath)
         tab_name = filepath.split('/')[-1]
         # Create a new tab and add the varListWidget to it.
@@ -35,10 +30,12 @@ class dataFileWidget(QtWidgets.QWidget):
         self.tabs.setCurrentWidget(var_list)
         self._update_range_slider()
 
-    def close_file(self, index):
+    def closeFile(self, index):
         # Add function for closing the tab here.
+        self.tabs.widget(index).deleteLater()
         self.tabs.removeTab(index)
-        self._update_range_slider()
+        if self.tabs.count() > 0:
+            self._update_range_slider()
 
     def _update_range_slider(self):
         min_time = math.inf
@@ -50,4 +47,6 @@ class dataFileWidget(QtWidgets.QWidget):
             min_time = min(min_time, t_range[0])
             max_time = max(max_time, t_range[1])
         # print(f"min_time: {min_time}, max_time: {max_time}")
-        self.parent.update_slider_limits(min_time, max_time)
+
+        # TODO(rose@) replace this with signal/slot logic
+        self.parent.plot_manager.updateSliderLimits(min_time, max_time)

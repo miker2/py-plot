@@ -15,22 +15,24 @@ class varListWidget(QtWidgets.QListView):
         super().__init__(parent)
 
         model = dataModel(filename)
-        # self.clicked.connect(self.item_clicked)
-        self.pressed.connect(self.item_pressed)
+        # self.clicked.connect(self.itemClicked)
+        self.pressed.connect(self.itemPressed)
 
         self.setModel(model)
 
         self.setDragEnabled(True)
 
+        self.filename = filename
+
     @property
     def time_range(self):
         return self.model().time_range
 
-    def item_clicked(self, index):
+    def itemClicked(self, index):
         QtGui.QMessageBox.information(self, "ListWidget",
                                       f"You clicked item {index.row()}: {index.data()}\n"
                                       + f"{index.data(varListWidget._PLOT_DATA).data}")
-    def item_pressed(self, index):
+    def itemPressed(self, index):
         print(f"You pressed {index.row()} : {index.data()}")
 
     def get_data(self, filename):
@@ -48,7 +50,7 @@ class varListWidget(QtWidgets.QListView):
         selected._time = self.model().time
         bstream = pickle.dumps(selected)
         mimeData = QtCore.QMimeData()
-        mimeData.setData("application/x-dataItem", bstream)
+        mimeData.setData("application/x-DataItem", bstream)
 
         drag = QtGui.QDrag(self)
         drag.setMimeData(mimeData)
