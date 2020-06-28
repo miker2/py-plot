@@ -1,15 +1,15 @@
 # This Python file uses the following encoding: utf-8
 # from PyQt5 import QtCore
-from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QVBoxLayout, QTabWidget
-from filterBoxWidget import filterBoxWidget
-from varListWidget import varListWidget
+
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
+from filterBoxWidget import FilterBoxWidget
+from varListWidget import VarListWidget
 
 import math
 
-class dataFileWidget(QtWidgets.QWidget):
+class DataFileWidget(QWidget):
     def __init__(self, parent):
-        QtWidgets.QWidget.__init__(self)
+        QWidget.__init__(self)
         self.parent = parent
 
         layout = QVBoxLayout(self)
@@ -19,11 +19,11 @@ class dataFileWidget(QtWidgets.QWidget):
         self.tabs.tabCloseRequested.connect(self.closeFile)
         layout.addWidget(self.tabs)
 
-        self.filter_box = filterBoxWidget(self.tabs)
+        self.filter_box = FilterBoxWidget(self.tabs)
         layout.addWidget(self.filter_box)
 
     def openFile(self, filepath):
-        var_list = varListWidget(self, filepath)
+        var_list = VarListWidget(self, filepath)
         tab_name = filepath.split('/')[-1]
         # Create a new tab and add the varListWidget to it.
         self.tabs.addTab(var_list, tab_name)
@@ -32,10 +32,14 @@ class dataFileWidget(QtWidgets.QWidget):
 
     def closeFile(self, index):
         # Add function for closing the tab here.
+        self.tabs.widget(index).close()
         self.tabs.widget(index).deleteLater()
         self.tabs.removeTab(index)
         if self.tabs.count() > 0:
             self._update_range_slider()
+
+    def getActiveDataFile(self):
+        return self.tabs.currentWidget()
 
     def _update_range_slider(self):
         min_time = math.inf

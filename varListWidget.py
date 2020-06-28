@@ -1,22 +1,24 @@
 # This Python file uses the following encoding: utf-8
 # from PyQt5 import QtCore
-from PyQt5 import QtWidgets
-from PyQt5 import QtGui
-from PyQt5 import QtCore
+from PyQt5.QtWidgets import QListView, QMessageBox
+from PyQt5.QtGui import QDrag, QKeyEvent
+from PyQt5.QtCore import Qt, pyqtSignal, QMimeData
 
-import pandas
 import pickle
-from dataModel import *
+import pandas
+from dataModel import DataModel
 
 
-class varListWidget(QtWidgets.QListView):
-    _PLOT_DATA = QtCore.Qt.UserRole
+class VarListWidget(QListView):
+
+    onClose = pyqtSignal()
+
     def __init__(self, parent, filename):
         super().__init__(parent)
 
-        model = dataModel(filename)
+        model = DataModel(filename)
         # self.clicked.connect(self.itemClicked)
-        self.pressed.connect(self.itemPressed)
+        # self.pressed.connect(self.itemPressed)
 
         self.setModel(model)
 
@@ -28,31 +30,47 @@ class varListWidget(QtWidgets.QListView):
     def time_range(self):
         return self.model().time_range
 
+    def close(self):
+        self.onClose.emit()
+
     def itemClicked(self, index):
-        QtGui.QMessageBox.information(self, "ListWidget",
-                                      f"You clicked item {index.row()}: {index.data()}\n"
-                                      + f"{index.data(varListWidget._PLOT_DATA).data}")
+        QMessageBox.information(self, "ListWidget",
+                                f"You clicked item {index.row()}: {index.data()}\n"
+                                + f"{index.data(varListWidget._PLOT_DATA).data}")
     def itemPressed(self, index):
         print(f"You pressed {index.row()} : {index.data()}")
 
-    def get_data(self, filename):
-        return pandas.read_csv(filename)
+    def keyPressEvent(self, event):
+        # We want to ignore the Up/Down arrow keys in the list here so that the "Zoom" functionality
+        # works. All other events will be passed to the base class method.
+        if type(event) == QKeyEvent and (event.key() == Qt.Key_Up or event.key() == Qt.Key_Down):
+            event.ignore()
+        else:
+            super().keyPressEvent(event)
 
     def mouseMoveEvent(self, e):
         self.startDrag(e)
 
     def startDrag(self, e):
-        index = self.indexAt(e.pos())
+        # This should work, but for some reason, does not always provide the right data.
+        # index = self.indexAt(e.pos())
+        # Instead, use the `currentIndex` method
+        mouse_idx = self.indexAt(e.pos())
+        index = self.currentIndex()
+        if mouse_idx != index:
+            print(f"Warning!!! index at mouse location {mouse_idx} doesn't match the " +
+                  f"'currentIndex' {index}")
         if not index.isValid():
             return
 
-        selected = self.model().data(index, QtCore.Qt.UserRole)
+        selected = self.model().data(index, Qt.UserRole)
         selected._time = self.model().time
+
         bstream = pickle.dumps(selected)
-        mimeData = QtCore.QMimeData()
+        mimeData = QMimeData()
         mimeData.setData("application/x-DataItem", bstream)
 
-        drag = QtGui.QDrag(self)
+        drag = QDrag(self)
         drag.setMimeData(mimeData)
 
         result = drag.exec()

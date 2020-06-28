@@ -1,13 +1,12 @@
 # This Python file uses the following encoding: utf-8
-# from PyQt5 import QtCore
-from PyQt5 import QtWidgets
-from PyQt5 import QtCore
-from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QLineEdit, QPushButton, QCheckBox
 
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLineEdit, QPushButton
+from PyQt5.QtWidgets import QCheckBox, QSizePolicy
 
-class filterBoxWidget(QtWidgets.QWidget):
+class FilterBoxWidget(QWidget):
     def __init__(self, df_widget):
-        QtWidgets.QWidget.__init__(self)
+        QWidget.__init__(self)
 
         self.df_widget = df_widget
 
@@ -24,8 +23,8 @@ class filterBoxWidget(QtWidgets.QWidget):
         self.search_button.clicked.connect(self.searchList)
 
         clear_button = QPushButton("clear")
-        clear_button.setSizePolicy(QtWidgets.QSizePolicy.Minimum,
-                                   QtWidgets.QSizePolicy.Fixed)
+        clear_button.setSizePolicy(QSizePolicy.Minimum,
+                                   QSizePolicy.Fixed)
 
         clear_button.clicked.connect(self.clearText)
 
@@ -51,16 +50,16 @@ class filterBoxWidget(QtWidgets.QWidget):
             if not selected.isValid():
                 # start at the beginning of the list
                 selected = model.index(0)
-            flags = QtCore.Qt.MatchWrap
+            flags = Qt.MatchWrap
             if self.filter_box.isChecked() :
-                flags = flags | QtCore.Qt.MatchRegExp
+                flags = flags | Qt.MatchRegExp
             else:
-                flags = flags | QtCore.Qt.MatchWildcard
+                flags = flags | Qt.MatchWildcard
 
             # Probably a bit more of an elegant way to do this, but because "match" might return
             # the "currentIndex" (if it matches) then we request 2 hits. If the first hit is the
             # current index, we skip it and take the 2nd one.
-            matches = model.match(selected, QtCore.Qt.DisplayRole,
+            matches = model.match(selected, Qt.DisplayRole,
                 self.search_box.text(), hits=2, flags=flags)
             if matches:
                 for m in matches:
