@@ -1,12 +1,13 @@
 # This Python file uses the following encoding: utf-8
-from PyQt5.QtWidgets import QApplication, QMainWindow, QSplitter, QFileDialog, QAction, QMessageBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QSplitter, QFileDialog, QAction, \
+                            QMessageBox, QLabel
 from PyQt5.QtGui import QKeyEvent
 from PyQt5.QtCore import QSize, Qt
 
 import pyqtgraph as pg
 
-from dataFileWidget import DataFileWidget
-from plotManager import PlotManager
+from data_file_widget import DataFileWidget
+from plot_manager import PlotManager
 
 import sys
 from pathlib import Path
@@ -15,13 +16,13 @@ import json
 
 pg.setConfigOptions(antialias=True)
 
-class PlotTool(QMainWindow):
+class RoboPlot(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
 
         self.setMinimumSize(QSize(640, 480))
         self.setWindowTitle("Data Analyzer")
-        self.setObjectName("PlotTool")
+        self.setObjectName("PyPlot")
 
         qSplitter = QSplitter(self)
         qSplitter.setObjectName("qSplitter")
@@ -37,6 +38,10 @@ class PlotTool(QMainWindow):
 
         # Depends on plot_manager, so needs to be created near the end.
         self.setupMainMenu()
+
+        tick_time_indicator = TimeTickWidget()
+        self.plot_manager.tickValueChanged.connect(tick_time_indicator.updateTimeTick)
+        self.statusBar().addPermanentWidget(tick_time_indicator)
 
     def setupMainMenu(self):
         openAction = QAction("&Open ...", self)
@@ -77,12 +82,21 @@ class PlotTool(QMainWindow):
         loadPlotlistAction.setStatusTip('Load tab configuration from plotlist')
         loadPlotlistAction.triggered.connect(self.loadPlotlist)
 
+        loadPlotlistForAllAction = QAction("load plotlist for all files", self)
+        loadPlotlistForAllAction.setStatusTip('Load the plotlist for all open datafiles')
+        loadPlotlistForAllAction.triggered.connect(lambda : self.loadPlotlist(all_files=True, append=True))
+
+        appendPlotlistAction = QAction("append to tab", self)
+        appendPlotlistAction.setStatusTip('Append the plotlist contents to the current tab')
+        appendPlotlistAction.triggered.connect(lambda : self.loadPlotlist(True))
+
         plotMenu = mainMenu.addMenu('&Plot')
         plotMenu.addAction(addPlotAction)
         plotMenu.addAction(newTabAction)
         plotMenu.addSeparator()
         plotMenu.addAction(savePlotlistAction)
         plotMenu.addAction(loadPlotlistAction)
+        plotMenu.addAction(loadPlotlistForAllAction)
 
 
     def keyPressEvent(self, event):
@@ -91,7 +105,8 @@ class PlotTool(QMainWindow):
             event.key() == Qt.Key_Left or \
             event.key() == Qt.Key_Right or \
             event.key() == Qt.Key_Up or \
-            event.key() == Qt.Key_Down):
+            event.key() == Qt.Key_Down) or \
+            (event.key() == Qt.Key_A and event.modifiers() & Qt.ControlModifier):
                 #__import__("ipdb").set_trace()
                 self.plot_manager.handleKeyPress(event)
                 event.accept()
@@ -105,7 +120,7 @@ class PlotTool(QMainWindow):
     def openFile(self):
         fname, _ = QFileDialog.getOpenFileName(self, "Open log file",
                                                       str(Path.home()),
-                                                      "Log files (*.csv)")
+                                                      "Log files (*.bin *.csv)")
         # Try setting the "DontUseNativeDialog" option to supress the GtkDialog warning :(
         if len(fname) > 0:
             self.statusBar().showMessage(f"Opening {fname}", 5000)
@@ -123,7 +138,7 @@ class PlotTool(QMainWindow):
         with open(fname, 'w') as fp:
             print(plotlist, file=fp)
 
-    def loadPlotlist(self):
+    def loadPlotlist(self, all_files=False, append=False):
         # Get the data source and ensure that a file is actually open before asking the user to
         # select the desired plotlist file.
         data_source = self.data_file_widget.getActiveDataFile()
@@ -140,12 +155,23 @@ class PlotTool(QMainWindow):
         with open(fname) as fp:
             plotlist = json.load(fp)
 
-        self.plot_manager.generatePlotsForActiveTab(plotlist, data_source)
+        if not all_files:
+            self.plot_manager.generatePlotsForActiveTab(plotlist, data_source, append)
+        else:
+            for idx in range(self.data_file_widget.openCount):
+                self.plot_manager.generatePlotsForActiveTab(plotlist, self.data_file_widget.getDataFile(idx), idx > 0)
+
+class TimeTickWidget(QLabel):
+    def __init__(self):
+        QLabel.__init__(self)
+
+    def updateTimeTick(self, val):
+        self.setText(f"tick: {val} | time: {val / 500.:0.3f}")
 
 if __name__ == "__main__":
     MainEventThread = QApplication([])
 
-    MainApplication = PlotTool()
+    MainApplication = RoboPlot()
     MainApplication.show()
 
     MainEventThread.exec()

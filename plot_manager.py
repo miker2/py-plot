@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
+from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QPoint
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QInputDialog, QLineEdit, QMenu, QAction
+
 from QRangeSlider import QRangeSlider
-from subPlotWidget import SubPlotWidget
+from sub_plot_widget import SubPlotWidget
 
 import math
-
 
 def _dispLayoutContents(layout):
     print(f"There are {layout.count()} items in the layout")
@@ -44,14 +44,18 @@ class PlotManager(QWidget):
 
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
+        self.tabs.setTabBarAutoHide(True)
+        self.tabs.setMovable(True)
         self.tabs.tabCloseRequested.connect(self.closePlotTab)
+        self.tabs.customContextMenuRequested.connect(self.onContextMenuRequest)
+        self.tabs.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tabs.tabBarDoubleClicked.connect(self.renameTab)
         central_layout.addWidget(self.tabs)
 
         self.addPlotTab()
 
     def closePlotTab(self, index):
         self.tabs.widget(index).close()
-        self.tabs.widget(index).deleteLater()
         self.tabs.removeTab(index)
 
     def addPlotTab(self):
@@ -70,7 +74,34 @@ class PlotManager(QWidget):
             self.modifyZoom(key == Qt.Key_Up, event.modifiers())
         elif key == Qt.Key_Left or key == Qt.Key_Right:
             self.moveCursor(key == Qt.Key_Right, event.modifiers())
+        elif key == Qt.Key_A and event.modifiers() == Qt.ControlModifier:
+            self.tabs.currentWidget().autoscaleYAxes()
 
+    @pyqtSlot(QPoint)
+    def onContextMenuRequest(self, pos):
+        # We only want to bring up the context menu when an actual tab is right-clicked. Check that
+        # the click position is inside the tab bar
+        if self.tabs.tabBar().geometry().contains(pos):
+            # Figure out specifically which tab was right clicked:
+            tab_idx = self.tabs.tabBar().tabAt(pos)
+
+            renameAct = QAction("rename...")
+            renameAct.setStatusTip("Rename the tab")
+            renameAct.triggered.connect(lambda : self.renameTab(tab_idx))
+
+            menu = QMenu(self.tabs)
+            menu.addAction(renameAct)
+
+            menu.exec(self.tabs.tabBar().mapToGlobal(pos))
+
+    @pyqtSlot(int)
+    def renameTab(self, idx):
+        current_name = self.tabs.tabText(idx)
+
+        text, ok = QInputDialog().getText(self, "Rename Tab", "Tab name:", QLineEdit.Normal,
+                                            current_name)
+        if ok and text:
+            self.tabs.setTabText(idx, text)
 
     def moveCursor(self, positive, modifier):
         # print(f"Move cursor {'Right' if positive else 'Left'}")
@@ -137,11 +168,11 @@ class PlotManager(QWidget):
         return {**{"name" : self.tabs.tabText(self.tabs.currentIndex())},
                 **self.tabs.currentWidget().getPlotInfo()}
 
-    def generatePlotsForActiveTab(self, plot_info, data_source):
+    def generatePlotsForActiveTab(self, plot_info, data_source, append):
         tab_name = plot_info['name']
-        if plot_info['name']:
+        if plot_info['name'] and append:  # Don't rename if appending to a tab
             self.tabs.setTabText(self.tabs.currentIndex(), plot_info['name'])
-        self.tabs.currentWidget().generatePlots(plot_info, data_source)
+        self.tabs.currentWidget().generatePlots(plot_info, data_source, clear_existing=not(append))
 
 class PlotAreaWidget(QWidget):
     def __init__(self, plot_manager):
@@ -185,7 +216,7 @@ class PlotAreaWidget(QWidget):
             # Don't allow the only remaining plot to be removed
             return
         item = self.plot_area.takeAt(self.plot_area.indexOf(subplot))
-        subplot.deleteLater()
+        subplot.close()
 
         #_dispLayoutContents(self.plot_area)
 
@@ -203,6 +234,10 @@ class PlotAreaWidget(QWidget):
         self._getPlot(0).pw.setXRange(min=self._plot_manager.range_slider.start(),
                                       max=self._plot_manager.range_slider.end(),
                                       padding=0)
+
+    def autoscaleYAxes(self):
+        for idx in range(self.plot_area.count()):
+            self._getPlot(idx).updatePlotYRange()
 
     def _linkAxes(self):
         # TODO: Make this use signal/slot mechanism
@@ -228,26 +263,31 @@ class PlotAreaWidget(QWidget):
 
         return plotlist
 
-    def generatePlots(self, plot_info, data_source):
+    def generatePlots(self, plot_info, data_source, clear_existing=True):
         # First, we ensure that there are the correct number of plots available.
         requested_count = plot_info['count']
         while self.plot_area.count() < requested_count:
             self.addSubplot()
 
-        while self.plot_area.count() > requested_count:
-            idx = self.plot_area.count()-1
-            print("Plot at idx {idx} : {self._getPlot(idx)}")
-            self.removeSubplot(self._getPlot(self.plot_area.count()-1))
+        if clear_existing:
+            while self.plot_area.count() > requested_count:
+                idx = self.plot_area.count()-1
+                print("Plot at idx {idx} : {self._getPlot(idx)}")
+                self.removeSubplot(self._getPlot(self.plot_area.count()-1))
 
         # Walk the list of traces and produce the plots.
         for i in range(requested_count):
             plot = plot_info["plots"][i]
 
             subplot = self._getPlot(i)
-            subplot.clearPlot()
+
+            if clear_existing:
+                subplot.clearPlot()
 
             for trace in plot["traces"]:
                 subplot.plotDataFromSource(trace, data_source)
 
-            subplot.setYRange(*plot["yrange"])
+            if clear_existing:
+                # Don't mess up the y-range if plots are being appended.
+                subplot.setYRange(*plot["yrange"])
 

@@ -5,18 +5,17 @@ from PyQt5.QtGui import QDrag, QKeyEvent
 from PyQt5.QtCore import Qt, pyqtSignal, QMimeData
 
 import pickle
-import pandas
-from dataModel import DataModel
+from data_model import DataModel
 
 
 class VarListWidget(QListView):
 
     onClose = pyqtSignal()
 
-    def __init__(self, parent, filename):
-        super().__init__(parent)
+    def __init__(self, parent, data_loader):
+        QListView.__init__(self, parent)
 
-        model = DataModel(filename)
+        model = DataModel(data_loader)
         # self.clicked.connect(self.itemClicked)
         # self.pressed.connect(self.itemPressed)
 
@@ -24,7 +23,7 @@ class VarListWidget(QListView):
 
         self.setDragEnabled(True)
 
-        self.filename = filename
+        self.filename = data_loader.source
 
     @property
     def time_range(self):

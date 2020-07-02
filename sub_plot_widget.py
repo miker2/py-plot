@@ -6,18 +6,17 @@ import pyqtgraph as pg
 
 import pickle
 import numpy as np
-from dataModel import DataItem
-from CustomPlotItem import CustomPlotItem
+from data_model import DataItem
+from custom_plot_item import CustomPlotItem
 
 
 class SubPlotWidget(QWidget):
     # Plot colors picked from here: https://colorbrewer2.org/#type=qualitative&scheme=Set1&n=8
     # with a slight modification to the "yellow" so it's darker and easier to see.
     COLORS=('#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00', '#a65628', '#D4C200', '#f781bf')
+    PEN_WIDTH=2
     def __init__(self, parent):
-        QWidget.__init__(self)
-
-        self.parent = parent
+        QWidget.__init__(self, parent=parent)
 
         vBox = QVBoxLayout(self)
 
@@ -72,13 +71,13 @@ class SubPlotWidget(QWidget):
     def contextMenu(self):
         menu = QMenu()
         addAboveAction = QAction("Add plot above", self.pw.getViewBox())
-        addAboveAction.triggered.connect(lambda : self.parent.addSubplotAbove(self))
+        addAboveAction.triggered.connect(lambda : self.parent().addSubplotAbove(self))
         menu.addAction(addAboveAction)
         addBelowAction = QAction("Add plot below", self.pw.getViewBox())
-        addBelowAction.triggered.connect(lambda : self.parent.addSubplotBelow(self))
+        addBelowAction.triggered.connect(lambda : self.parent().addSubplotBelow(self))
         menu.addAction(addBelowAction)
         deleteSubplotAction = QAction("Remove Plot", self.pw.getViewBox())
-        deleteSubplotAction.triggered.connect(lambda : self.parent.removeSubplot(self))
+        deleteSubplotAction.triggered.connect(lambda : self.parent().removeSubplot(self))
         menu.addAction(deleteSubplotAction)
         menu.addSeparator()
         clearPlotAction = QAction("Clear plot", self.pw.getViewBox())
@@ -113,26 +112,34 @@ class SubPlotWidget(QWidget):
 
         item = self.pw.getPlotItem().plot(x=source.model().time,
                                           y=y_data,
-                                          pen=pg.mkPen(color=SubPlotWidget.COLORS[self.cidx],
-                                                       width=2),
-                                          name=name)
+                                          pen=pg.mkPen(color=self._getColor(self.cidx),
+                                                       width=SubPlotWidget.PEN_WIDTH),
+                                          name=name,
+                                          # clipToView=True,
+                                          autoDownsample=True,
+                                          downsampleMethod='peak')
 
-        label = CustomPlotItem(item, self.parent._plot_manager._tick)
+        label = CustomPlotItem(self, item, self.parent()._plot_manager._tick)
         self._traces.append(label)
         # Insert just before the end so that the spacer is last - TODO(rose@): fix this.
         self._labels.insertWidget(self._labels.count() - 1, label)
-        self.parent._plot_manager.tickValueChanged.connect(label.onTickChanged)
+        self.parent()._plot_manager.tickValueChanged.connect(label.onTickChanged)
 
         source.onClose.connect(lambda : self.removeItem(item, label))
 
-        self.cidx = (self.cidx + 1) % len(SubPlotWidget.COLORS)
+        self.cidx += 1
 
         self.updatePlotYRange()
 
     def removeItem(self, trace, label):
         self.pw.removeItem(trace)
         self._labels.removeWidget(label)
-        label.setVisible(False)  # Seems like a hack (deleteLater causes issues with connected signals)
+        label.close()
+
+        self.cidx = max(0, self.cidx-1)
+
+        for idx in range(self._labels.count() - 1):
+            self._labels.itemAt(idx).widget().updateColor(self._getColor(idx))
 
     def clearPlot(self):
         # HAX!!! Save the cursor!
@@ -145,15 +152,14 @@ class SubPlotWidget(QWidget):
         # Remove labels also.
         while self._labels.count() > 1:  # This is a hack so the stretch element doesn't disappear (always last)
             lbl = self._labels.takeAt(0).widget()
-            lbl.setVisible(False)  # Seems like a hack (deleteLater causes issues with connected signals)
-            # lbl.deleteLater()
+            lbl.close()
 
         self.cidx = 0
 
     def updatePlotYRange(self, val=None):
         self.pw.autoRange()
-        # Workaround for autoRange() no respecting the disabled x-axis
-        self.parent.updatePlotXRange()
+        # Workaround for autoRange() not respecting the disabled x-axis
+        self.parent().updatePlotXRange()
 
     def setYRange(self, ymin, ymax):
         self.pw.setYRange(ymin, ymax, padding=0)
@@ -168,7 +174,9 @@ class SubPlotWidget(QWidget):
         # isn't documented in the public API.
         y_range = self.pw.getPlotItem().getAxis('left').range
         plot_info['yrange'] = y_range
-        # Again, another hack because I'm doing something wrong when trying to delete objects!
-        plot_info['traces'] = [trace.name for trace in self._traces if trace.isVisible()]
+        plot_info['traces'] = [trace.getPlotSpec() for trace in self._traces if trace.isVisible()]
 
         return plot_info
+
+    def _getColor(self, idx):
+        return SubPlotWidget.COLORS[idx % len(SubPlotWidget.COLORS)]

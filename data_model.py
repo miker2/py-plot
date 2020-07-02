@@ -3,7 +3,6 @@
 
 from PyQt5.QtCore import QAbstractListModel, QModelIndex, QVariant, Qt
 
-import pandas as pd
 
 class DataItem(object):
     '''
@@ -31,19 +30,15 @@ class DataItem(object):
 
 
 class DataModel(QAbstractListModel):
-    def __init__(self, filename, parent=None):
-        super().__init__(parent)
+    def __init__(self, data_loader, parent=None):
+        QAbstractListModel.__init__(self, parent=parent)
 
-        # TODO(rose@): If we want to be able to support multiple data formats, we need
-        # to move this out of here and make the dataModel take a pandas dataframe instead
-        # of a filename. I don't think we want to complicate the logic of the dataModel
-        # with specific file handling logic.
-        self._raw_data = pd.read_csv(filename)
+        self._raw_data = data_loader.dataFrame
         self._data = []
         for var in sorted(self._raw_data.columns):
-            self._data.append(DataItem(var, self._raw_data[var]))
+            self._data.append(DataItem(var, self._raw_data[var].to_numpy()))
 
-        self._time = self._raw_data['time']
+        self._time = data_loader.time
         self._t_min = min(self._time)
         self._t_max = max(self._time)
 

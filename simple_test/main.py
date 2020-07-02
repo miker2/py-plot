@@ -1,7 +1,7 @@
 # This Python file uses the following encoding: utf-8
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QSizePolicy
 from PyQt5.QtCore import QSize, QVariant
-from PyQt5.QtGui import QPalette
+from PyQt5.QtGui import QPalette, QColor
 
 import pyqtgraph as pg
 
@@ -9,6 +9,8 @@ import pickle
 
 from data import DataFileWidget
 from data import DataItem
+
+from CustomPlotItem import CustomPlotItem
 
 class PlotTool(QMainWindow):
     def __init__(self):
@@ -36,13 +38,13 @@ class PlotTool(QMainWindow):
         
 class MyPlotWidget(QWidget):
     COLORS=('#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00', '#a65628', '#D4C200', '#f781bf')
+    PEN_WIDTH=2
     def __init__(self):
         QWidget.__init__(self)
 
         vBox = QVBoxLayout(self)
 
         self._labels = QHBoxLayout()
-        #self._labels.setSpacing(0)
         self._labels.addStretch(1)
         vBox.addLayout(self._labels)
 
@@ -75,15 +77,15 @@ class MyPlotWidget(QWidget):
         print(type(selected.data))
         item = self.pw.getPlotItem().plot(x=selected.time.to_numpy(),
                                           y=selected.data.to_numpy(),
-                                          pen=pg.mkPen(color=MyPlotWidget.COLORS[self.cidx],
-                                                       width=2),
+                                          pen=pg.mkPen(color=self._getColor(self.cidx),
+                                                       width=self.PEN_WIDTH),
                                           name=name)
-        label = self.makeLabel(item)
+        label = CustomPlotItem(self, item, 0)
         self._labels.insertWidget(self._labels.count()-1, label)
         e.source().onClose.connect(lambda : self.removeItem(item, label))
         
         self.pw.autoRange()
-        self.cidx = (self.cidx + 1) % len(MyPlotWidget.COLORS)
+        self.cidx += 1
         e.accept()
 
     def makeLabel(self, plot_item):
@@ -97,12 +99,19 @@ class MyPlotWidget(QWidget):
 
         return label
 
-    def removeItem(self, item, label):
+    def removeItem(self, item, label, update_color=True):
         self.pw.removeItem(item)
         self._labels.removeWidget(label)
         # self._labels.takeAt(self._labels.indexOf(label))
-        label.deleteLater()
-        
+        label.close()
+        print(self._labels.count())
+        self.cidx = max(0, self.cidx-1)
+
+        for i in range(self._labels.count() - 1):
+            trace = self._labels.itemAt(i).widget().updateColor(self._getColor(i))
+
+    def _getColor(self, idx):
+        return MyPlotWidget.COLORS[idx % len(MyPlotWidget.COLORS)]
 
 if __name__ == "__main__":
     MainEventThread = QApplication([])

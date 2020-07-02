@@ -82,7 +82,6 @@ class DataFileWidget(QWidget):
     def closeFile(self, index):
         # Add function for closing the tab here.
         self.tabs.widget(index).close()
-        self.tabs.widget(index).deleteLater()
         self.tabs.removeTab(index)
 
 
