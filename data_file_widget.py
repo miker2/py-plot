@@ -1,5 +1,6 @@
 # This Python file uses the following encoding: utf-8
 
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QMessageBox, QInputDialog
 from filter_box_widget import FilterBoxWidget
 from var_list_widget import VarListWidget
@@ -11,6 +12,9 @@ import pandas as pd
 import simlog_decode
 
 class DataFileWidget(QWidget):
+
+    countChanged = pyqtSignal()
+
     def __init__(self, parent):
         QWidget.__init__(self, parent=parent)
 
@@ -47,12 +51,16 @@ class DataFileWidget(QWidget):
         self.tabs.setCurrentWidget(var_list)
         self._update_range_slider()
 
+        self.countChanged.emit()
+
     def closeFile(self, index):
         # Add function for closing the tab here.
         self.tabs.widget(index).close()
         self.tabs.removeTab(index)
         if self.tabs.count() > 0:
             self._update_range_slider()
+
+        self.countChanged.emit()
 
     def getActiveDataFile(self):
         return self.tabs.currentWidget()

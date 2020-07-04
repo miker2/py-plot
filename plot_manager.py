@@ -17,6 +17,8 @@ def _dispLayoutContents(layout):
         except:
             pass
 
+_DEFAULT_FREQ=500.
+
 ''' This class is for management of a linked set of subplots
 '''
 class PlotManager(QWidget):
@@ -110,16 +112,21 @@ class PlotManager(QWidget):
             mult *= 5
         if modifier & Qt.ShiftModifier:
             mult *= 20
-        self._tick += mult * (1 if positive else -1)
-        self._tick = max(0, min(self._tick, math.inf))
+        self.setTick(self._tick + mult * (1 if positive else -1))
 
+    def setTick(self, tick):
+        self._tick = tick
+        self._tick = max(0, min(self._tick, math.inf))
         self.tickValueChanged.emit(self._tick)
+
+    def setTickFromTime(self, t_cursor):
+        tick = int(round(t_cursor * _DEFAULT_FREQ))
+        self.setTick(tick)
 
     def modifyZoom(self, zoom_in, modifier):
         # Slider is in time units. Here we'll assume the DT, but we can change this later.
-        default_freq = 500.
-        min_range = 10. / default_freq
-        mult = 5. / default_freq
+        min_range = 10. / _DEFAULT_FREQ
+        mult = 5. / _DEFAULT_FREQ
         if modifier & Qt.ControlModifier:
             mult *= 5
         if modifier & Qt.ShiftModifier:
@@ -187,14 +194,17 @@ class PlotAreaWidget(QWidget):
 
         self.updatePlotXRange()
 
+    def plotManager(self):
+        return self._plot_manager
+
     def addSubplot(self, idx=None):
         # Default to the bottom of the list
         if idx is None:
             idx = self.plot_area.count()
         subplot = SubPlotWidget(self)
-        subplot.setCursor(self._plot_manager._tick)
+        subplot.moveCursor(self._plot_manager._tick)
         subplot.setXLimits(self._plot_manager.range_slider.min(), self._plot_manager.range_slider.max())
-        self._plot_manager.tickValueChanged.connect(subplot.setCursor)
+        self._plot_manager.tickValueChanged.connect(subplot.moveCursor)
         self._plot_manager.range_slider.minValueChanged.connect(subplot.setXLimitMin)
         self._plot_manager.range_slider.maxValueChanged.connect(subplot.setXLimitMax)
         self.plot_area.insertWidget(idx, subplot)

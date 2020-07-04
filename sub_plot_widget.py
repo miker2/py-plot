@@ -1,7 +1,7 @@
 # This Python file uses the following encoding: utf-8
 
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QMenu, QAction
-from PyQt5.QtCore import QVariant
+from PyQt5.QtCore import Qt, QVariant, QRect
 import pyqtgraph as pg
 
 import pickle
@@ -9,6 +9,7 @@ import numpy as np
 from data_model import DataItem
 from custom_plot_item import CustomPlotItem
 
+_DEFAULT_FREQ=500.
 
 class SubPlotWidget(QWidget):
     # Plot colors picked from here: https://colorbrewer2.org/#type=qualitative&scheme=Set1&n=8
@@ -55,8 +56,10 @@ class SubPlotWidget(QWidget):
         self.pw.getPlotItem().setMenuEnabled(enableMenu=False, enableViewBoxMenu=None)
         self.pw.getViewBox().menu = self.contextMenu()
 
-    def setCursor(self, tick):
-        self.cursor.setValue(tick / 500.)
+        self.pw.scene().sigMouseClicked.connect(self._onSceneMouseClickEvent)
+
+    def moveCursor(self, tick):
+        self.cursor.setValue(tick / _DEFAULT_FREQ)
 
     def setXLimits(self, xmin, xmax):
         self.setXLimitMin(xmin)
@@ -104,6 +107,15 @@ class SubPlotWidget(QWidget):
 
         e.accept()
 
+    def _onSceneMouseClickEvent(self, event):
+        if event.button() != Qt.LeftButton:
+            event.ignore()
+            return
+
+        t_click = self.pw.getViewBox().mapSceneToView(event.scenePos()).x()
+        self.parent().plotManager().setTickFromTime(t_click)
+        event.accept()
+
     def plotDataFromSource(self, name, source):
         y_data = source.model().getDataByName(name)
 
@@ -119,11 +131,11 @@ class SubPlotWidget(QWidget):
                                           autoDownsample=True,
                                           downsampleMethod='peak')
 
-        label = CustomPlotItem(self, item, self.parent()._plot_manager._tick)
+        label = CustomPlotItem(self, item, source, self.parent().plotManager()._tick)
         self._traces.append(label)
         # Insert just before the end so that the spacer is last - TODO(rose@): fix this.
         self._labels.insertWidget(self._labels.count() - 1, label)
-        self.parent()._plot_manager.tickValueChanged.connect(label.onTickChanged)
+        self.parent().plotManager().tickValueChanged.connect(label.onTickChanged)
 
         source.onClose.connect(lambda : self.removeItem(item, label))
 

@@ -8,7 +8,7 @@ import pyqtgraph as pg
 import numpy as np
 
 class CustomPlotItem(QLabel):
-    def __init__(self, parent, plot_data_item, current_tick):
+    def __init__(self, parent, plot_data_item, source, current_tick):
         QLabel.__init__(self, plot_data_item.name(), parent=parent)
 
         ''' This item should handle the following things:
@@ -20,11 +20,16 @@ class CustomPlotItem(QLabel):
 
         self.trace = plot_data_item
 
+        self.source = source
+
+        # Keep a copy of the current tick in case we need it later:
+        self._tick = current_tick
+
         if np.issubdtype(self.trace.yData.dtype, np.integer):
             self._fmt_str = "{0:d}"
         else:
             self._fmt_str = "{0:.6g}"
-        self.setText(self._generateLabel(current_tick))
+        self.setText(self._generateLabel())
         # __import__("ipdb").set_trace()
         self.setSizePolicy(QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum))
         self.setWordWrap(True)
@@ -61,7 +66,8 @@ class CustomPlotItem(QLabel):
     @pyqtSlot(int)
     def onTickChanged(self, tick):
         # print(f"onTickChanged called with tick={tick}")
-        self.setText(self._generateLabel(tick))
+        self._tick = tick
+        self.setText(self._generateLabel())
 
     def enterEvent(self, event):
         super().enterEvent(event)
@@ -75,6 +81,7 @@ class CustomPlotItem(QLabel):
         self.update()
 
     def paintEvent(self, event):
+        self.setText(self._generateLabel())
         super().paintEvent(event)
 
         #print(event.type())
@@ -106,5 +113,8 @@ class CustomPlotItem(QLabel):
 
         return y[tick]
 
-    def _generateLabel(self, tick):
-        return f"{self.trace.name()}: " + self._fmt_str.format(self._getValue(tick))
+    def _generateLabel(self):
+        prefix = ""
+        if not self.source.idx is None:
+            prefix = f"F{self.source.idx}:"
+        return f"{prefix}{self.trace.name()}: " + self._fmt_str.format(self._getValue(self._tick))

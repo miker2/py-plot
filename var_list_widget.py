@@ -25,12 +25,27 @@ class VarListWidget(QListView):
 
         self.filename = data_loader.source
 
+        self._idx = None
+
+        parent.countChanged.connect(self._updateIdx)
+
     @property
     def time_range(self):
         return self.model().time_range
 
+    @property
+    def idx(self):
+        return self._idx
+
     def close(self):
         self.onClose.emit()
+        return super().close()
+
+    def _updateIdx(self):
+        if self.parent().count() == 1:
+            self._idx = None
+        else:
+            self._idx = self.parent().indexOf(self) + 1
 
     def itemClicked(self, index):
         QMessageBox.information(self, "ListWidget",
