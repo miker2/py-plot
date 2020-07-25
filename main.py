@@ -1,14 +1,15 @@
 # This Python file uses the following encoding: utf-8
 from PyQt5.QtWidgets import QApplication, QMainWindow, QSplitter, \
         QFileDialog, QAction, QMessageBox, QLabel
-from PyQt5.QtGui import QKeyEvent
-from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtGui import QKeyEvent, QIcon
+from PyQt5.QtCore import Qt, QCoreApplication, QSettings, QSize, QPoint
 
 import pyqtgraph as pg
 
 from data_file_widget import DataFileWidget
 from plot_manager import PlotManager
 
+import os
 import sys
 from pathlib import Path
 import pprint
@@ -28,7 +29,7 @@ class RoboPlot(QMainWindow):
 
         qSplitter = QSplitter(self)
         qSplitter.setObjectName("qSplitter")
-        qSplitter.setHandleWidth(10)  # Make the handle a bit bigger
+        qSplitter.setHandleWidth(8)  # Make the handle a bit bigger
         self.setCentralWidget(qSplitter)
 
         self.data_file_widget = DataFileWidget(self)
@@ -38,14 +39,27 @@ class RoboPlot(QMainWindow):
         self.plot_manager.setObjectName("plotManagerWidget")
         qSplitter.addWidget(self.plot_manager)
 
+        # When resizing the main window, we want the plots to get bigger, but the variable window
+        # to remain the same size (unless the user drags the splitter).
+        qSplitter.setStretchFactor(0, 0)
+        qSplitter.setStretchFactor(1, 1)
+
         # Depends on plot_manager, so needs to be created near the end.
-        self.setupMainMenu()
+        self.setupMenuBar()
 
         tick_time_indicator = TimeTickWidget()
         self.plot_manager.tickValueChanged.connect(tick_time_indicator.updateTimeTick)
         self.statusBar().addPermanentWidget(tick_time_indicator)
 
-    def setupMainMenu(self):
+        self._readSettings()
+
+    def setupMenuBar(self):
+        self.setupFileMenu()
+        self.setupPlotMenu()
+
+        self.statusBar()
+
+    def setupFileMenu(self):
         openAction = QAction("&Open ...", self)
         openAction.setShortcut("Ctrl+O")
         openAction.setStatusTip("Open a data file")
@@ -56,14 +70,13 @@ class RoboPlot(QMainWindow):
         exitAction.setStatusTip('Leave The App')
         exitAction.triggered.connect(self.closeApp)
 
-        self.statusBar()
-
         mainMenu = self.menuBar()
         fileMenu = mainMenu.addMenu('&File')
         fileMenu.addAction(openAction)
         fileMenu.addSeparator()
         fileMenu.addAction(exitAction)
 
+    def setupPlotMenu(self):
         addPlotAction = QAction("add subplot", self)
         addPlotAction.setShortcut("Ctrl+n")
         addPlotAction.setStatusTip('Add new subplot')
@@ -88,10 +101,15 @@ class RoboPlot(QMainWindow):
         loadPlotlistForAllAction.setStatusTip('Load the plotlist for all open datafiles')
         loadPlotlistForAllAction.triggered.connect(lambda : self.loadPlotlist(all_files=True, append=True))
 
+        loadPlotlistNewTabAction = QAction("load configuration in new tab", self)
+        loadPlotlistNewTabAction.setStatusTip('Loads a plotlist into a new tab')
+        loadPlotlistNewTabAction.triggered.connect(lambda : self.loadPlotlist(all_files=False, append=False, new_tab=True))
+
         appendPlotlistAction = QAction("append to tab", self)
         appendPlotlistAction.setStatusTip('Append the plotlist contents to the current tab')
         appendPlotlistAction.triggered.connect(lambda : self.loadPlotlist(True))
 
+        mainMenu = self.menuBar()
         plotMenu = mainMenu.addMenu('&Plot')
         plotMenu.addAction(addPlotAction)
         plotMenu.addAction(newTabAction)
@@ -99,7 +117,38 @@ class RoboPlot(QMainWindow):
         plotMenu.addAction(savePlotlistAction)
         plotMenu.addAction(loadPlotlistAction)
         plotMenu.addAction(loadPlotlistForAllAction)
+        plotMenu.addAction(loadPlotlistNewTabAction)
 
+
+    def _writeSettings(self):
+        settings = QSettings()
+
+        settings.beginGroup("MainWindow")
+        settings.setValue("size", self.size())
+        settings.setValue("position", self.pos())
+        settings.setValue("window_state", self.windowState())
+        settings.endGroup()
+
+        settings.sync()
+
+    def _readSettings(self):
+        settings = QSettings()
+
+        settings.beginGroup("MainWindow")
+        self.resize(settings.value("size", QSize(640, 480)))
+        self.move(settings.value("position", QPoint(200, 200)))
+        window_state = int(settings.value("window_state", Qt.WindowNoState))
+        if window_state & Qt.WindowMaximized:
+            print("Setting window to maximized.")
+            self.showMaximized()
+        elif window_state & Qt.WindowFullScreen:
+            print("Setting window to fullscreen.")
+            self.showFullScreen()
+        settings.endGroup()
+
+    def closeEvent(self, event):
+        self._writeSettings()
+        event.accept()
 
     def keyPressEvent(self, event):
         ''' Handle keyboard input here (looking mainly for arrow keys + modifiers '''
@@ -117,7 +166,7 @@ class RoboPlot(QMainWindow):
 
 
     def closeApp(self):
-        sys.exit()
+        self.close()
 
     def openFileDialog(self):
         fname, _ = QFileDialog.getOpenFileName(self, "Open log file",
@@ -133,11 +182,11 @@ class RoboPlot(QMainWindow):
 
     def savePlotlist(self):
         fname, _ = QFileDialog.getSaveFileName(self, "Save plotlist",
-                                                    str(Path.home()) + "/default.plotlist",
+                                                    __BASE_LEMO_DIR__+"/data/analysis/default.plotlist",
                                                     "Plotlist files (*.plotlist)",
                                                     "*.plotlist")
 
-        if fname is None:
+        if not fname:
             # User aborted.
             return
         # Get the plot info and convert it to nice looking json so the file produced is more human
@@ -146,7 +195,7 @@ class RoboPlot(QMainWindow):
         with open(fname, 'w') as fp:
             print(plotlist, file=fp)
 
-    def loadPlotlist(self, all_files=False, append=False):
+    def loadPlotlist(self, all_files=False, append=False, new_tab=False):
         # Get the data source and ensure that a file is actually open before asking the user to
         # select the desired plotlist file.
         data_source = self.data_file_widget.getActiveDataFile()
@@ -157,14 +206,17 @@ class RoboPlot(QMainWindow):
             return
 
         fname, _ = QFileDialog.getOpenFileName(self, "Load plotlist",
-                                                      str(Path.home()),
+                                                     __BASE_LEMO_DIR__+"/data/analysis/default.plotlist",
                                                       "Plotlist files (*.plotlist)")
 
-        if fname is None:
+        if not fname:
             # No file opened, so nothing to do.
             return
         with open(fname) as fp:
             plotlist = json.load(fp)
+
+        if new_tab:
+            self.plot_manager.addPlotTab()
 
         if not all_files:
             self.plot_manager.generatePlotsForActiveTab(plotlist, data_source, append)
@@ -173,12 +225,31 @@ class RoboPlot(QMainWindow):
                 self.plot_manager.generatePlotsForActiveTab(plotlist, self.data_file_widget.getDataFile(idx), idx > 0)
 
     def loadFromCLI(self, args):
-        print(f"Loading {args.filename}...")
-        self.openFile(args.filename)
+        print(f"Loading {args.f}")
+        self.openFile(args.f)
 
-        if not args.p is None:
-            # Load plotlist here. Code above needs a bit of refactoring
-            pass
+        # todo: This is duplicate from above
+        # Wrap in function
+        if args.p is None:
+            # Nothing else to do.
+            return
+
+        # Plot manager creates a tab by default, so we'll only add a new tab if there is more than 1 plotlist
+        count = 0
+        for pl in args.p:
+            if count > 0:
+                self.plot_manager.addPlotTab()
+
+            data_source = self.data_file_widget.getActiveDataFile()
+            if data_source is None:
+                print("Error: No open file! You must open a file before loading a plot configuration.")
+            try:
+                with open(pl[0].name) as fp:
+                    plotlist = json.load(fp)
+                    self.plot_manager.generatePlotsForActiveTab(plotlist, data_source, append=False)
+                count += 1
+            except:
+                print("notpassed")
 
 
 class TimeTickWidget(QLabel):
@@ -190,27 +261,23 @@ class TimeTickWidget(QLabel):
 
 
 if __name__ == "__main__":
-    MainEventThread = QApplication([])
+    MainEventThread = QApplication(sys.argv)
+    resource_dir, _ = os.path.split(os.path.realpath(__file__))
 
     MainApplication = RoboPlot()
 
-    # Parse args here
-    parser = argparse.ArgumentParser(description='PyPlot')
-    subparser = parser.add_subparsers(help="sub-command help")
-
-    # gui_parser = subparser.add_parser('gui')
-
-    cli_parser = subparser.add_parser('load')
-    cli_parser.add_argument('filename')
-    cli_parser.add_argument('-p')
-    cli_parser.set_defaults(func=MainApplication.loadFromCLI)
+    # <Begin> Parse args here
+    parser = argparse.ArgumentParser(description="PyPlot")
+    parser.add_argument('-f')
+    parser.add_argument('-p', type=argparse.FileType('r'), action='append', nargs='+')
+    parser.set_defaults(func=MainApplication.loadFromCLI)
     args = parser.parse_args()
 
-    print(args)
-    try:
+    if args.f is None and args.p is not None:
+        print("If a plotlist is specified from the command-line, a file must also be specified (via '-f').")
+    if args.f is not None:
         args.func(args)
-    except:
-        pass
+    # <End> Parse args here
 
     MainApplication.show()
 

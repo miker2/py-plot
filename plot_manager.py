@@ -56,6 +56,10 @@ class PlotManager(QWidget):
 
         self.addPlotTab()
 
+    @property
+    def tabCount(self):
+        return self.tabs.count()
+
     def closePlotTab(self, index):
         self.tabs.widget(index).close()
         self.tabs.removeTab(index)
@@ -177,7 +181,7 @@ class PlotManager(QWidget):
 
     def generatePlotsForActiveTab(self, plot_info, data_source, append):
         tab_name = plot_info['name']
-        if plot_info['name'] and append:  # Don't rename if appending to a tab
+        if plot_info['name'] and not append:  # Don't rename if appending to a tab
             self.tabs.setTabText(self.tabs.currentIndex(), plot_info['name'])
         self.tabs.currentWidget().generatePlots(plot_info, data_source, clear_existing=not(append))
 
@@ -297,7 +301,8 @@ class PlotAreaWidget(QWidget):
             for trace in plot["traces"]:
                 subplot.plotDataFromSource(trace, data_source)
 
-            if clear_existing:
+            # Handle the case where the "yrange" key is missing.
+            if clear_existing and "yrange" in plot.keys():
                 # Don't mess up the y-range if plots are being appended.
                 subplot.setYRange(*plot["yrange"])
 

@@ -4,6 +4,7 @@ from PyQt5.QtCore import Qt, pyqtSlot, QEvent, QRect
 from PyQt5.QtWidgets import QLabel, QSizePolicy
 from PyQt5.QtGui import QPalette, QPixmap, QPainter, QPaintEvent
 
+import os
 import pyqtgraph as pg
 import numpy as np
 
@@ -40,7 +41,10 @@ class CustomPlotItem(QLabel):
         palette.setColor(QPalette.WindowText, color)
         self.setPalette(palette)
 
-        self._close_pxm = QPixmap('close_icon.png')
+        # For now assume that the resources are in the same directory as
+        # this script.
+        resource_dir, _ = os.path.split(os.path.realpath(__file__))
+        self._close_pxm = QPixmap(resource_dir + '/close_icon.png')
         assert(not self._close_pxm.isNull())
 
 

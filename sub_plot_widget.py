@@ -32,6 +32,7 @@ class SubPlotWidget(QWidget):
         self.pw.showGrid(x=True, y=True)
 
         pi = self.pw.getPlotItem()
+        pi.hideButtons()
         # pi.addLegend()
         # self.clicked.connect(self.on_clicked)
 
