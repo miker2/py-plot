@@ -68,6 +68,12 @@ class DataFileWidget(QWidget):
     def getDataFile(self, idx):
         return self.tabs.widget(idx)
 
+    def getFirstSupervisorLog(self):
+        for idx in range(self.tabs.count()):
+            if self.getDataFile(idx).isSupervisorLog:
+                return self.getDataFile(idx)
+        return None
+
     def _update_range_slider(self):
         min_time = math.inf
         max_time = -math.inf
@@ -89,6 +95,7 @@ class FileLoader:
         self._filename = filename
         self._time = None
         self._df = None
+        self._supervisor_log = False
 
     @property
     def success(self):
@@ -106,6 +113,10 @@ class FileLoader:
     @property
     def dataFrame(self):
         return self._df
+
+    @property
+    def isSupervisorLog(self):
+        return self._supervisor_log
 
 '''
 The ".bin" extension is quite generic, but for now assume this is a log file from pybullet.

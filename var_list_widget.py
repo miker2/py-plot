@@ -27,6 +27,8 @@ class VarListWidget(QListView):
 
         self._idx = None
 
+        self._supervisor_log = data_loader.isSupervisorLog
+
         parent.countChanged.connect(self._updateIdx)
 
     @property
@@ -36,6 +38,10 @@ class VarListWidget(QListView):
     @property
     def idx(self):
         return self._idx
+
+    @property
+    def isSupervisorLog(self):
+        return self._supervisor_log
 
     def close(self):
         self.onClose.emit()

@@ -1,6 +1,6 @@
 # This Python file uses the following encoding: utf-8
 from PyQt5.QtWidgets import QApplication, QMainWindow, QSplitter, \
-        QFileDialog, QAction, QMessageBox, QLabel
+        QFileDialog, QAction, QMessageBox, QLabel, QDockWidget
 from PyQt5.QtGui import QKeyEvent, QIcon
 from PyQt5.QtCore import Qt, QCoreApplication, QSettings, QSize, QPoint
 
@@ -8,6 +8,12 @@ import pyqtgraph as pg
 
 from data_file_widget import DataFileWidget
 from plot_manager import PlotManager
+try:
+    from visualizer_3d_widget import DockedVisualizer3DWidget
+    _visualizer_available = True
+except ImportError:
+    _visualizer_available = False
+
 
 import os
 import sys
@@ -51,11 +57,14 @@ class RoboPlot(QMainWindow):
         self.plot_manager.tickValueChanged.connect(tick_time_indicator.updateTimeTick)
         self.statusBar().addPermanentWidget(tick_time_indicator)
 
+        self.visualizer_3d = None
+
         self._readSettings()
 
     def setupMenuBar(self):
         self.setupFileMenu()
         self.setupPlotMenu()
+        self.setupToolMenu()
 
         self.statusBar()
 
@@ -119,6 +128,46 @@ class RoboPlot(QMainWindow):
         plotMenu.addAction(loadPlotlistForAllAction)
         plotMenu.addAction(loadPlotlistNewTabAction)
 
+    def setupToolMenu(self):
+        main_menu = self.menuBar()
+        tool_menu = main_menu.addMenu('&Tools')
+
+        if _visualizer_available:
+            show_3d_visualizer_action = QAction("Show 3D visualizer", self)
+            show_3d_visualizer_action.setStatusTip('Show the 3D visualizer window')
+            show_3d_visualizer_action.triggered.connect(self.createVisualizerWindow)
+            tool_menu.addAction(show_3d_visualizer_action)
+
+    def createVisualizerWindow(self):
+        if not self.visualizer_3d:
+            # Create the window
+            source = self.data_file_widget.getFirstSupervisorLog()
+            self.visualizer_3d = DockedVisualizer3DWidget(self, source)
+            self.addDockWidget(Qt.RightDockWidgetArea, self.visualizer_3d)
+
+            # We can't assign a value to a variable in a lambda, so we'll define a small
+            # function here.
+            def onClose():
+                self.visualizer_3d = None
+
+            self.visualizer_3d.onClose.connect(onClose)
+            self.data_file_widget.countChanged.connect(self.connectSourceToVisualizerMaybe)
+            self.plot_manager.tickValueChanged.connect(self.visualizer_3d.update)
+        else:
+            self.visualizer_3d.activateWindow()
+
+    def connectSourceToVisualizerMaybe(self):
+        if self.visualizer_3d and not self.visualizer_3d.hasSource:
+            self.visualizer_3d.setSource(self.data_file_widget.getFirstSupervisorLog())
+
+    def createFloatingDockWidget(self, title=None):
+        print("Calling 'createFloatingDockWidget'")
+        dock_widget = QDockWidget(title, self)
+        dock_widget.setAllowedAreas(Qt.BottomDockWidgetArea | Qt.RightDockWidgetArea)
+        self.addDockWidget(Qt.RightDockWidgetArea, dock_widget)
+        dock_widget.setFloating(True)
+
+        return dock_widget
 
     def _writeSettings(self):
         settings = QSettings()
@@ -127,6 +176,7 @@ class RoboPlot(QMainWindow):
         settings.setValue("size", self.size())
         settings.setValue("position", self.pos())
         settings.setValue("window_state", self.windowState())
+        settings.setValue("show_3d_viz", int(not self.visualizer_3d is None))
         settings.endGroup()
 
         settings.sync()
@@ -144,10 +194,17 @@ class RoboPlot(QMainWindow):
         elif window_state & Qt.WindowFullScreen:
             print("Setting window to fullscreen.")
             self.showFullScreen()
+        show_3d_viz = bool(int(settings.value("show_3d_viz", 0)))
+        if show_3d_viz:
+            self.createVisualizerWindow()
         settings.endGroup()
 
     def closeEvent(self, event):
         self._writeSettings()
+
+        if self.visualizer_3d:
+            self.visualizer_3d.close()
+
         event.accept()
 
     def keyPressEvent(self, event):

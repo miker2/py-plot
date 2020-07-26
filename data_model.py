@@ -58,6 +58,10 @@ class DataModel(QAbstractListModel):
     def time_range(self):
         return (self.t_min, self.t_max)
 
+    @property
+    def tick_max(self):
+        return self._time.shape[0]
+
     def rowCount(self, parent=QModelIndex()):
         return len(self._data)
 
