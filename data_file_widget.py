@@ -1,11 +1,13 @@
 # This Python file uses the following encoding: utf-8
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QMessageBox, QInputDialog
+from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QTabWidget, QMessageBox, \
+    QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QLabel, QListWidget
 from filter_box_widget import FilterBoxWidget
 from var_list_widget import VarListWidget
 
 import math
+import numpy as np
 import os
 import pandas as pd
 
@@ -24,7 +26,8 @@ class DataFileWidget(QWidget):
 
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
-        # self.tabs.setTabBarAutoHide(True)  # TODO(rose@): Enable this when the filename is embedded in the VarListWidget
+        # TODO(rose@): Enable this when the filename is embedded in the VarListWidget
+        # self.tabs.setTabBarAutoHide(True)
         self.tabs.tabCloseRequested.connect(self.closeFile)
         layout.addWidget(self.tabs)
 
@@ -74,6 +77,11 @@ class DataFileWidget(QWidget):
                 return self.getDataFile(idx)
         return None
 
+    def getTime(self, idx=0):
+        if self.tabs.count() == 0:
+            return None
+        return self.getDataFile(idx).time
+
     def _update_range_slider(self):
         min_time = math.inf
         max_time = -math.inf
@@ -108,7 +116,7 @@ class FileLoader:
 
     @property
     def time(self):
-        return self._time
+        return self._time.to_numpy()
 
     @property
     def dataFrame(self):
@@ -117,6 +125,60 @@ class FileLoader:
     @property
     def isSupervisorLog(self):
         return self._supervisor_log
+
+
+def timeSelectorDialog(caller, df):
+    dialog = QDialog(caller)
+    dialog.setWindowTitle("Time variable selector")
+    form = QFormLayout(dialog)
+    var_selector = QListWidget()
+    var_selector.addItems(df.columns)
+    var_selector.setCurrentRow(0)
+    form.addRow("Select time variable:", var_selector)
+    synthetic_time_tickbox = QCheckBox()
+    synthetic_time_tickbox.setToolTip("Check this box if you want to create a synthetic time variable.")
+    time_delta_input = QDoubleSpinBox()
+    DECIMALS = 3
+    STEP_SIZE = 1./ (10**DECIMALS)
+    time_delta_input.setSingleStep(STEP_SIZE)
+    time_delta_input.setMinimum(STEP_SIZE)
+    time_delta_input.setMaximum(1.0)
+    time_delta_input.setDecimals(DECIMALS)
+    time_delta_input.setToolTip("Specify the sampling period of the time vector")
+    hbox = QHBoxLayout()
+    hbox.addWidget(synthetic_time_tickbox)
+    hbox.addWidget(time_delta_input)
+    hbox.addWidget(QLabel("sec/tick"))
+    hbox.addStretch()
+    form.addRow("Create time variable:", hbox)
+
+    # Add some standard buttons (Cancel/Ok) at the bottom of the dialog
+    button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+                                  Qt.Horizontal, dialog);
+    form.addRow(button_box);
+    button_box.accepted.connect(dialog.accept)
+    button_box.rejected.connect(dialog.reject)
+
+    # Show the dialog as modal
+    if dialog.exec() == QDialog.Accepted:
+        if synthetic_time_tickbox.isChecked():
+            # User wants a synthetic time variable, so let's create one:
+            dt = time_delta_input.value()
+            # We can safely call this variable "time" because if "time already existed,
+            # this dialog wouldn't appear.
+            df['time'] = dt * np.array(range(df.shape[0]), dtype=np.float64)
+            time = df['time']
+        else:
+            item = var_selector.currentItem().text()
+            time = df[item]
+            if np.any(np.diff(time) < 0):
+                QMessageBox.warning(caller, "Non-monotonic time variable",
+                                    f"WARNING: Selected time variable '{item}' is not " +
+                                    "monotonically increasing!")
+        return True, time
+    else:
+        return False, None
+
 
 '''
 The ".bin" extension is quite generic, but for now assume this is a log file from pybullet.
@@ -136,11 +198,15 @@ class GenericCSVLoader(FileLoader):
             self._df = pd.read_csv(filename)
             # Assume there is a 'time' column. If not, we'll ask the user
             self._time = self._df['time']
+            # Make time start at zero.
+            #self._time -= self._time[0]
         except KeyError:
             # Ask the user which column to use for time
-            item, ok = QInputDialog.getItem(caller, "Time variable selector", "Select time variable:", self._df.columns, editable=False)
+            ok, time = timeSelectorDialog(caller, self._df)
             if ok:
-                self._time = self._df[item]
+                self._time = time
+                # Make time start at zero.
+                #self._time -= self._time[0]
             else:
                 QMessageBox.critical(caller, "Unable to load file",
                                     "No time series selected. Unable to finish loading data.")

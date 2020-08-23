@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-
 from PyQt5.QtCore import QAbstractListModel, QModelIndex, QVariant, Qt
 
+import numpy as np
 
 class DataItem(object):
     '''
@@ -39,8 +39,11 @@ class DataModel(QAbstractListModel):
             self._data.append(DataItem(var, self._raw_data[var].to_numpy()))
 
         self._time = data_loader.time
-        self._t_min = min(self._time)
-        self._t_max = max(self._time)
+        # The `.item()` is necessary because we want a python type (float), not a numpy.dtype
+        self._t_min = min(self._time).item()
+        self._t_max = max(self._time).item()
+        self._avg_dt = np.mean(np.diff(self._time)).item()
+        print(f"Loaded {data_loader.source} which has a dt of {self._avg_dt} sec and a sampling rate of {int(round(1/self._avg_dt))} Hz")
 
     @property
     def time(self):
@@ -61,6 +64,10 @@ class DataModel(QAbstractListModel):
     @property
     def tick_max(self):
         return self._time.shape[0]
+
+    @property
+    def avg_dt(self):
+        return self._avg_dt
 
     def rowCount(self, parent=QModelIndex()):
         return len(self._data)

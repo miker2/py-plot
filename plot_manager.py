@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QPoint
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QInputDialog, QLineEdit, QMenu, QAction
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QInputDialog, QLineEdit, QMenu, \
+                            QAction
 
 from QRangeSlider import QRangeSlider
 from sub_plot_widget import SubPlotWidget
 
 import math
+import graph_utils
 
 def _dispLayoutContents(layout):
     print(f"There are {layout.count()} items in the layout")
@@ -24,20 +26,28 @@ _DEFAULT_FREQ=500.
 class PlotManager(QWidget):
 
     tickValueChanged = pyqtSignal(int)
+    timeValueChanged = pyqtSignal(float)
 
     def __init__(self, parent):
         QWidget.__init__(self, parent)
 
-        # This is the main widget of the app. It contains the range slider and a layout containing all of the subplots.
+        # The "controller" is the main program. This is how we'll access the data file widget
+        self._controller = parent
+
+        # This is the main widget of the app. It contains the range slider and a layout containing
+        # all of the subplots.
         central_layout = QVBoxLayout(self)
         central_layout.setObjectName("plotManagerLayout")
 
         self._tick = 0
+        self._time = 0
 
         self.range_slider = QRangeSlider()
         self.range_slider.show()
         self.range_slider.setMin(0.)
-        self.range_slider.setMax(1000.)  # large number here is sort of a hack for now so the plot x-axis resizes properly on the first file load.
+        # large number here is sort of a hack for now so the plot x-axis resizes properly on the
+        # first file load.
+        self.range_slider.setMax(1000.)
         self.range_slider.setRange(self.range_slider.min(), self.range_slider.max())
 
         self.range_slider.startValueChanged.connect(self.updatePlotXRange)
@@ -74,7 +84,10 @@ class PlotManager(QWidget):
         self.tabs.currentWidget().addSubplot()
 
     def handleKeyPress(self, event):
-        ''' This is the main keypress event handler. It will handle distrubution of the various functionality. '''
+        '''
+        This is the main keypress event handler. It will handle distrubution of the various
+        functionality.
+        '''
         key = event.key()
         if key == Qt.Key_Down or key == Qt.Key_Up:
             self.modifyZoom(key == Qt.Key_Up, event.modifiers())
@@ -119,13 +132,24 @@ class PlotManager(QWidget):
         self.setTick(self._tick + mult * (1 if positive else -1))
 
     def setTick(self, tick):
-        self._tick = tick
-        self._tick = max(0, min(self._tick, math.inf))
-        self.tickValueChanged.emit(self._tick)
+        time_series = self._getTime()
+        # If there's no file open, it probably doesn't make sense to move the cursor anyway.
+        if not time_series is None:
+            tick = max(0, min(tick, len(time_series)-1))
+            time = time_series[tick]
+            self.setTickFromTime(time)
 
     def setTickFromTime(self, t_cursor):
-        tick = int(round(t_cursor * _DEFAULT_FREQ))
-        self.setTick(tick)
+        self._time = t_cursor
+        time_series = self._getTime()
+        if time_series is None:
+            # Default to a psuedo tick count here
+            self._tick = int(round(t_cursor * _DEFAULT_FREQ))
+        else:
+            self._tick = graph_utils.timeToNearestTick(time_series, t_cursor)
+            self._time = time_series[self._tick]
+        self.tickValueChanged.emit(self._tick)
+        self.timeValueChanged.emit(self._time)
 
     def modifyZoom(self, zoom_in, modifier):
         # Slider is in time units. Here we'll assume the DT, but we can change this later.
@@ -185,6 +209,9 @@ class PlotManager(QWidget):
             self.tabs.setTabText(self.tabs.currentIndex(), plot_info['name'])
         self.tabs.currentWidget().generatePlots(plot_info, data_source, clear_existing=not(append))
 
+    def _getTime(self, idx=0):
+        return self._controller.data_file_widget.getTime(idx)
+
 class PlotAreaWidget(QWidget):
     def __init__(self, plot_manager):
         QWidget.__init__(self)
@@ -206,9 +233,9 @@ class PlotAreaWidget(QWidget):
         if idx is None:
             idx = self.plot_area.count()
         subplot = SubPlotWidget(self)
-        subplot.moveCursor(self._plot_manager._tick)
+        subplot.moveCursor(self._plot_manager._time)
         subplot.setXLimits(self._plot_manager.range_slider.min(), self._plot_manager.range_slider.max())
-        self._plot_manager.tickValueChanged.connect(subplot.moveCursor)
+        self._plot_manager.timeValueChanged.connect(subplot.moveCursor)
         self._plot_manager.range_slider.minValueChanged.connect(subplot.setXLimitMin)
         self._plot_manager.range_slider.maxValueChanged.connect(subplot.setXLimitMax)
         self.plot_area.insertWidget(idx, subplot)

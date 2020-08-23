@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 
 from PyQt5.QtCore import Qt, pyqtSlot, QEvent, QRect
-from PyQt5.QtWidgets import QLabel, QSizePolicy
+from PyQt5.QtWidgets import QLabel, QMenu, QAction, QApplication
 from PyQt5.QtGui import QPalette, QPixmap, QPainter, QPaintEvent
 
 import os
 import pyqtgraph as pg
 import numpy as np
 
+import graph_utils
+
 class CustomPlotItem(QLabel):
+    PEN_WIDTH=2
     def __init__(self, parent, plot_data_item, source, current_tick):
         QLabel.__init__(self, plot_data_item.name(), parent=parent)
 
@@ -31,9 +34,6 @@ class CustomPlotItem(QLabel):
         else:
             self._fmt_str = "{0:.6g}"
         self.setText(self._generateLabel())
-        # __import__("ipdb").set_trace()
-        self.setSizePolicy(QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum))
-        self.setWordWrap(True)
 
         # Make the label text the same color as the trace.
         palette = QPalette()
@@ -47,16 +47,62 @@ class CustomPlotItem(QLabel):
         self._close_pxm = QPixmap(resource_dir + '/close_icon.png')
         assert(not self._close_pxm.isNull())
 
+        self._hidden = False
 
         self._show_close_button = False
         self._close_btn_rect = QRect(0, 0, 16, 16)
 
+        self._menu = self.createMenu()
+
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.showMenu)
+
     def updateColor(self, color_str):
-        pen = pg.mkPen(color=color_str, width=self.parent().PEN_WIDTH)
+        pen = pg.mkPen(color=color_str, width=CustomPlotItem.PEN_WIDTH)
         self.trace.setPen(pen)
         palette = QPalette()
         palette.setColor(QPalette.WindowText, pen.color())
         self.setPalette(palette)
+        self.toggleTrace(self._hidden)
+
+    def createMenu(self):
+        menu = QMenu()
+        hideTraceAction = QAction("Hide trace", self)
+        hideTraceAction.triggered.connect(self.toggleTrace)
+        hideTraceAction.setCheckable(True)
+        copyLabelAction = QAction("copy", self)
+        copyLabelAction.triggered.connect(lambda : QApplication.clipboard().setText(self.text()))
+        copyValueAction = QAction("copy value", self)
+        value_txt = lambda : QApplication.clipboard().setText(str(self._getValue(self._tick)))
+        copyValueAction.triggered.connect(value_txt)
+
+        menu.addAction(hideTraceAction)
+        menu.addAction(copyLabelAction)
+        menu.addAction(copyValueAction)
+        return menu
+
+    def showMenu(self, point):
+        self._menu.exec_(self.mapToGlobal(point))
+
+    def toggleTrace(self, is_checked):
+        pen = self.trace.opts['pen']
+        mycol = pen.color()
+
+        if is_checked:
+            pen.setStyle(Qt.NoPen)
+            self.trace.setPen(pen)
+            # Set QColor alpha for the label:
+            mycol.setAlpha(100)
+        else:
+            pen.setStyle(Qt.SolidLine)
+            self.trace.setPen(pen)
+            # Set QColor alpha for the label
+            mycol.setAlpha(255)
+        palette = QPalette()
+        palette.setColor(QPalette.WindowText, mycol)
+        self.setPalette(palette)
+
+        self._hidden = is_checked
 
     @property
     def name(self):
@@ -67,10 +113,14 @@ class CustomPlotItem(QLabel):
         # future when we start supporting derived signals.
         return self.trace.name()
 
-    @pyqtSlot(int)
-    def onTickChanged(self, tick):
-        # print(f"onTickChanged called with tick={tick}")
-        self._tick = tick
+    @pyqtSlot(float)
+    def onTimeChanged(self, time):
+        # We use "timeToTick" here instead of "timeToNearestTick" because if a signal is sampled
+        # at a lower frequency than the master signal, we want the sample-and-hold version of the
+        # value, not the closest value.
+        self._tick = graph_utils.timeToTick(self.trace.xData, time)
+        #print(f"onTimeChanged called for {self.trace.name()} with time={time}, " + \
+        #      f"corresponding tick={self._tick}")
         self.setText(self._generateLabel())
 
     def enterEvent(self, event):
@@ -101,7 +151,6 @@ class CustomPlotItem(QLabel):
             painter.end()
 
     def mousePressEvent(self, event):
-
         if event.button() == Qt.LeftButton and self._close_btn_rect.contains(event.pos()):
             self.removeItem()
             event.accept()
@@ -114,7 +163,6 @@ class CustomPlotItem(QLabel):
     def _getValue(self, tick):
         y = self.trace.yData
         tick = min(tick, len(y)-1)
-
         return y[tick]
 
     def _generateLabel(self):

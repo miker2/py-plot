@@ -3,30 +3,29 @@
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QMenu, QAction
 from PyQt5.QtCore import Qt, QVariant, QRect
 import pyqtgraph as pg
+from flow_layout import FlowLayout
 
 import pickle
 import numpy as np
 from data_model import DataItem
 from custom_plot_item import CustomPlotItem
 
-_DEFAULT_FREQ=500.
-
 class SubPlotWidget(QWidget):
     # Plot colors picked from here: https://colorbrewer2.org/#type=qualitative&scheme=Set1&n=8
     # with a slight modification to the "yellow" so it's darker and easier to see.
     COLORS=('#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00', '#a65628', '#D4C200', '#f781bf')
-    PEN_WIDTH=2
     def __init__(self, parent):
         QWidget.__init__(self, parent=parent)
 
         vBox = QVBoxLayout(self)
 
-        self._labels = QHBoxLayout()
-        self._labels.addStretch()
+        self._labels = FlowLayout()
         vBox.addLayout(self._labels)
 
         self.pw = pg.PlotWidget()
-        vBox.addWidget(self.pw)
+        # Adding stretch below ensures that the plow widget takes up as much space as possible
+        # (labels take up only the minimum space possible)
+        vBox.addWidget(self.pw, stretch=1)
 
         self.pw.setBackground('w')
         self.pw.showGrid(x=True, y=True)
@@ -59,8 +58,8 @@ class SubPlotWidget(QWidget):
 
         self.pw.scene().sigMouseClicked.connect(self._onSceneMouseClickEvent)
 
-    def moveCursor(self, tick):
-        self.cursor.setValue(tick / _DEFAULT_FREQ)
+    def moveCursor(self, time):
+        self.cursor.setValue(time)
 
     def setXLimits(self, xmin, xmax):
         self.setXLimitMin(xmin)
@@ -123,10 +122,10 @@ class SubPlotWidget(QWidget):
         if y_data is None:
             return
 
-        item = self.pw.getPlotItem().plot(x=source.model().time,
+        item = self.pw.getPlotItem().plot(x=source.time,
                                           y=y_data,
                                           pen=pg.mkPen(color=self._getColor(self.cidx),
-                                                       width=SubPlotWidget.PEN_WIDTH),
+                                                       width=CustomPlotItem.PEN_WIDTH),
                                           name=name,
                                           # clipToView=True,
                                           autoDownsample=True,
@@ -134,12 +133,10 @@ class SubPlotWidget(QWidget):
 
         label = CustomPlotItem(self, item, source, self.parent().plotManager()._tick)
         self._traces.append(label)
-        # Insert just before the end so that the spacer is last - TODO(rose@): fix this.
-        self._labels.insertWidget(self._labels.count() - 1, label)
-        self.parent().plotManager().tickValueChanged.connect(label.onTickChanged)
+        self._labels.addWidget(label)
+        self.parent().plotManager().timeValueChanged.connect(label.onTimeChanged)
 
         source.onClose.connect(lambda : self.removeItem(item, label))
-
         self.cidx += 1
 
         self.updatePlotYRange()
@@ -151,7 +148,7 @@ class SubPlotWidget(QWidget):
 
         self.cidx = max(0, self.cidx-1)
 
-        for idx in range(self._labels.count() - 1):
+        for idx in range(self._labels.count()):
             self._labels.itemAt(idx).widget().updateColor(self._getColor(idx))
 
     def clearPlot(self):
@@ -163,7 +160,7 @@ class SubPlotWidget(QWidget):
         self.pw.addItem(self.cursor)
 
         # Remove labels also.
-        while self._labels.count() > 1:  # This is a hack so the stretch element doesn't disappear (always last)
+        while self._labels.count() > 0:
             lbl = self._labels.takeAt(0).widget()
             lbl.close()
 

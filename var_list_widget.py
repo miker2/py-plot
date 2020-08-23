@@ -32,6 +32,10 @@ class VarListWidget(QListView):
         parent.countChanged.connect(self._updateIdx)
 
     @property
+    def time(self):
+        return self.model().time
+
+    @property
     def time_range(self):
         return self.model().time_range
 
@@ -57,6 +61,7 @@ class VarListWidget(QListView):
         QMessageBox.information(self, "ListWidget",
                                 f"You clicked item {index.row()}: {index.data()}\n"
                                 + f"{index.data(varListWidget._PLOT_DATA).data}")
+
     def itemPressed(self, index):
         print(f"You pressed {index.row()} : {index.data()}")
 
