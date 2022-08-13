@@ -11,13 +11,14 @@ from data_model import DataModel
 class VarListWidget(QListView):
 
     onClose = pyqtSignal()
+    timeChanged = pyqtSignal()
 
     def __init__(self, parent, data_loader):
         QListView.__init__(self, parent)
 
         model = DataModel(data_loader)
-        # self.clicked.connect(self.itemClicked)
-        # self.pressed.connect(self.itemPressed)
+        # self.clicked.connect(self.item_clicked)
+        # self.pressed.connect(self.item_pressed)
 
         self.setModel(model)
 
@@ -27,13 +28,17 @@ class VarListWidget(QListView):
 
         self._idx = None
 
-        self._supervisor_log = data_loader.isSupervisorLog
+        self._supervisor_log = data_loader.is_supervisor_log
 
-        parent.countChanged.connect(self._updateIdx)
+        parent.countChanged.connect(self._update_idx)
 
     @property
     def time(self):
         return self.model().time
+
+    @property
+    def time_offset(self):
+        return self.model().time_offset
 
     @property
     def time_range(self):
@@ -44,25 +49,30 @@ class VarListWidget(QListView):
         return self._idx
 
     @property
-    def isSupervisorLog(self):
+    def is_supervisor_log(self):
         return self._supervisor_log
+
+    def set_time_offset(self, time_offset):
+        self.model().set_time_offset(time_offset)
+        self.timeChanged.emit()
 
     def close(self):
         self.onClose.emit()
         return super().close()
 
-    def _updateIdx(self):
+    def _update_idx(self):
         if self.parent().count() == 1:
             self._idx = None
         else:
             self._idx = self.parent().indexOf(self) + 1
 
-    def itemClicked(self, index):
+    def item_clicked(self, index):
         QMessageBox.information(self, "ListWidget",
                                 f"You clicked item {index.row()}: {index.data()}\n"
                                 + f"{index.data(varListWidget._PLOT_DATA).data}")
 
-    def itemPressed(self, index):
+    @staticmethod
+    def item_pressed(index):
         print(f"You pressed {index.row()} : {index.data()}")
 
     def keyPressEvent(self, event):
@@ -92,10 +102,10 @@ class VarListWidget(QListView):
         selected._time = self.model().time
 
         bstream = pickle.dumps(selected)
-        mimeData = QMimeData()
-        mimeData.setData("application/x-DataItem", bstream)
+        mime_data = QMimeData()
+        mime_data.setData("application/x-DataItem", bstream)
 
         drag = QDrag(self)
-        drag.setMimeData(mimeData)
+        drag.setMimeData(mime_data)
 
         result = drag.exec()

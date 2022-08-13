@@ -21,16 +21,17 @@ from maths.running_minmax import RunningMinMaxSpec
 
 from data_model import DataItem
 from docked_widget import DockedWidget
+
 try:
     from py_expression_eval import Parser
 except ModuleNotFoundError:
     import subprocess
     import sys
+
     subprocess.check_call([sys.executable, "-m", "pip", "install", "py_expression_eval"])
     from py_expression_eval import Parser
 
 
-''' A thin DockedWidget wrapper around the MathsWidget object '''
 class DockedMathsWidget(DockedWidget):
 
     def __init__(self, parent=None):
@@ -47,8 +48,9 @@ class ThinModelMock:
     def __init__(self, parent):
         self.parent = parent
 
-    def getDataByName(self, name):
-        return self.parent.getDataByName(name)
+    def get_data_by_name(self, name):
+        return self.parent.get_data_by_name(name)
+
 
 # Convenience method for storing info about math-derived variables. This could be incorporated
 # into an actual data model.
@@ -58,24 +60,25 @@ class VarInfo:
     data: np.ndarray
     source: int
 
+
 class MathsWidget(QWidget):
     def __init__(self, parent=None):
         QWidget.__init__(self, parent=parent)
 
-        self.setMinimumSize(320, 240)
+        self.setMinimumWidth(320)
         self.resize(640, 480)
 
         main_layout = QHBoxLayout()
 
         math_layout = QVBoxLayout()
-        button_layout = self.createButtons()
+        button_layout = self.create_buttons()
 
         main_layout.addLayout(math_layout)
         main_layout.addLayout(button_layout)
 
         self.setLayout(main_layout)
 
-        # This probably needs to be a model so we can store additional info here (at
+        # This probably needs to be a model so we can store additional info here. At
         # the very least, we need to know which list it came from so we can get the
         # variables eventually.
         self.var_in = QListWidget()
@@ -84,7 +87,7 @@ class MathsWidget(QWidget):
 
         self.var_out = QListWidget()
         self.var_out.setDragEnabled(True)
-        setattr(self.var_out, 'startDrag', self.startDrag)
+        setattr(self.var_out, 'start_drag', self.start_drag)
         io_layout = QHBoxLayout()
         io_layout.addWidget(self.var_in)
         io_layout.addWidget(self.var_out)
@@ -127,7 +130,10 @@ class MathsWidget(QWidget):
 
         self._current_cb = None
 
-    def createButtons(self):
+    def sizeHint(self):
+        return self.parentWidget().sizeHint()
+
+    def create_buttons(self):
 
         math_funcs = (("differentiate", DifferentiateSpec(self)),
                       ("integrate", IntegrateSpec(self)),
@@ -144,7 +150,7 @@ class MathsWidget(QWidget):
             r, c = math.floor(i / n_cols), i % n_cols
             mf, cb = math_funcs[i]
             math_button = QPushButton(mf)
-            math_button.clicked.connect(cb.buttonCallback)
+            math_button.clicked.connect(cb.button_callback)
             button_layout.addWidget(math_button, r, c)
         button_layout.setRowStretch(0, 600)
         return button_layout
@@ -181,7 +187,7 @@ class MathsWidget(QWidget):
         list_name = f"{vidx}: {var_name}"
         new_item = QListWidgetItem(list_name)
         new_item.setData(Qt.ToolTipRole, vidx)
-        #self._vars[f"x{self.var_in.count()}"] = e.source().model().getDataByName(var_name)
+        # self._vars[f"x{self.var_in.count()}"] = e.source().model().get_data_by_name(var_name)
         var_info = VarInfo(var_name, selected.data, e.source())
         self._vars[vidx] = var_info
         # Add this to the list of input variables.
@@ -214,12 +220,11 @@ class MathsWidget(QWidget):
 
         try:
             # Collect the required variables:
-            e_data = { v : self._vars[v].data for v in e_vars }
+            e_data = {v: self._vars[v].data for v in e_vars}
             val = expr.evaluate(e_data)
         except Exception as ex:
             print(f"Some sort of error! -- {ex}")
             return
-
 
         vname = self.math_entry.text()
         for v in e_vars:
@@ -238,9 +243,9 @@ class MathsWidget(QWidget):
         #              the first file is sufficient.
         data_item._time = self._vars[e_vars[0]].source.time
 
-        self.addNewVar(data_item, self._vars[e_vars[0]].source)
+        self.add_new_var(data_item, self._vars[e_vars[0]].source)
 
-    def addNewVar(self, data_item, source):
+    def add_new_var(self, data_item, source):
         list_name = f"y{self.var_out.count()}"
         new_item = QListWidgetItem(f"{list_name}: {data_item.var_name}")
         new_item.setData(Qt.UserRole, data_item)
@@ -253,37 +258,36 @@ class MathsWidget(QWidget):
         remove_row = lambda: self.var_out.takeItem(self.var_out.row(new_item))
         source.onClose.connect(remove_row)
 
-    def startDrag(self, e):
+    def start_drag(self, e):
         index = self.var_out.currentRow()
 
         selected = self.var_out.item(index).data(Qt.UserRole)
         bstream = pickle.dumps(selected)
 
-        mimeData = QMimeData()
-        mimeData.setData("application/x-DataItem", bstream)
+        mime_data = QMimeData()
+        mime_data.setData("application/x-DataItem", bstream)
 
         vid = self.var_out.item(index).data(Qt.ToolTipRole)
-        # NOTE(rose@) These feel like dirty little hacks but they do work (for now).
+        # NOTE(rose@) These feel like dirty little hacks, but they do work (for now).
         setattr(self, 'onClose', self._vars[vid].source.onClose)
         setattr(self, 'time', self._vars[vid].source.time)
         setattr(self, 'idx', self._vars[vid].source.idx)
         drag = QDrag(self)
-        drag.setMimeData(mimeData)
+        drag.setMimeData(mime_data)
 
         result = drag.exec()
-
 
     ######################### THE CODE BELOW THIS LINE SHOULDN'T EXIST!!! ####################
     def model(self):
         # TODO(rose@): Fix this hack! For now, redirect the model to our mocked model.
         return self._silly_model
 
-    def getDataByName(self, name):
-        # TODO(rose@): This is a a bit of a hack in order to make drag/drop plotting work.
+    def get_data_by_name(self, name):
+        # TODO(rose@): This is a bit of a hack in order to make drag/drop plotting work.
         # If we decide to keep this, the model should be formalized.
         data = None
         # Make a lookup of the variable names... oi vey
-        v_lookup = { v.var_name : k for k, v in self._vars.items() }
+        v_lookup = {v.var_name: k for k, v in self._vars.items()}
         try:
             vid = v_lookup[name]
             data = self._vars[vid].data

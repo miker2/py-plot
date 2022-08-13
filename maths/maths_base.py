@@ -9,15 +9,17 @@ import abc
 from data_model import DataItem
 from var_list_widget import VarListWidget
 
+
 class MathSpecBase(QObject):
     __metaclass__ = abc.ABCMeta
+
     def __init__(self, parent, name):
         QObject.__init__(self, parent=parent)
 
         self._name = name
 
         self.button = QPushButton(name)
-        self.button.clicked.connect(self.buttonCallback)
+        self.button.clicked.connect(self.button_callback)
 
         self._msg_box = None
 
@@ -26,22 +28,22 @@ class MathSpecBase(QObject):
         return self._name
 
     @abc.abstractmethod
-    def buttonCallback(self, checked):
+    def button_callback(self, checked):
         pass
 
     @abc.abstractmethod
-    def getParams(self):
+    def get_params(self):
         pass
 
     @abc.abstractmethod
-    def doMath(self, data, dt):
+    def do_math(self, data, dt):
         pass
 
     @abc.abstractmethod
-    def defaultVarName(self, vname):
+    def default_var_name(self, vname):
         pass
 
-    def createMessageBox(self):
+    def create_message_box(self):
         self._msg_box = QMessageBox(self.parent())
         self._msg_box.setWindowTitle(self._name)
         self._msg_box.setText("Select a variable")
@@ -69,15 +71,15 @@ class MathSpecBase(QObject):
                 self._msg_box.close()
                 self._msg_box = None
 
-            if self.getParams():
-                val = self.doMath(selected, vlist.model().avg_dt)
+            if self.get_params():
+                val = self.do_math(selected, vlist.model().avg_dt)
 
                 vname, accept = QInputDialog.getText(self.parent(), "Enter variable name", "Variable name:",
-                                                     text=self.defaultVarName(selected.var_name))
+                                                     text=self.default_var_name(selected.var_name))
                 if accept:
-                   data_item = DataItem(vname, val)
-                   data_item._time = selected._time
-                   self.parent().addNewVar(data_item, vlist)
+                    data_item = DataItem(vname, val)
+                    data_item._time = selected._time
+                    self.parent().add_new_var(data_item, vlist)
                 else:
                     print("User cancelled operation!")
             else:

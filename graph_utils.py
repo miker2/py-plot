@@ -5,7 +5,9 @@ import numpy as np
 ''' This method returns the index of `time_series` that is closest to `time_point`
     s.t. time_series[index] <= time_point (price is right rules).
 '''
-def timeToTick(time_series, time_point):
+
+
+def time_to_tick(time_series, time_point):
     # Add an offset of a single nanosecond so that if the supplied time_point is at a value that is
     # in the timeseries, then we'll get that tick back, rather than the tick prior
     # A single nanosecond is used under the assumption that we won't ever have a time_series that
@@ -17,6 +19,9 @@ def timeToTick(time_series, time_point):
 
     return res[-1]
 
+
 ''' This method returns the index of `time_series` that is closest to `time_point` '''
-def timeToNearestTick(time_series, time_point):
+
+
+def time_to_nearest_tick(time_series, time_point):
     return np.argmin(np.abs(np.array(time_series) - time_point))

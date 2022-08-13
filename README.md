@@ -6,7 +6,7 @@
 *  pyqt5
 *  pyqtgraph
 *  pyopengl
-*  pinocchio (a python module used for forward kinematics. Only required for LeMo)
+*  pinocchio (a python module used for forward kinematics)
 
 
 The recommended method for installing these dependencies is via `conda`. Alternatively, your system package manager and `pip` can be used instead (for all dependencies except `pinocchio`).

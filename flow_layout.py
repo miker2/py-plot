@@ -1,8 +1,9 @@
 # Ported from the C++ implementation found here:
 #  https://doc.qt.io/qt-5/qtwidgets-layouts-flowlayout-example.html
 
-from PyQt5.QtWidgets import QLayout, QStyle, QLayoutItem, QSizePolicy
+from PyQt5.QtWidgets import QLayout, QStyle, QSizePolicy
 from PyQt5.QtCore import Qt, QPoint, QRect, QSize
+
 
 class FlowLayout(QLayout):
 
@@ -21,21 +22,22 @@ class FlowLayout(QLayout):
     #  while(item = takeAt(0)) {
     #    delete item;
     #  }
+    # Python should garbage collect automatically
 
     def addItem(self, item):
         self._item_list.append(item)
 
-    def horizontalSpacing(self):
+    def horizontal_spacing(self):
         if self._h_space >= 0:
             return self._h_space
         else:
-            return self._smartSpacing(QStyle.PM_LayoutHorizontalSpacing)
+            return self._smart_spacing(QStyle.PM_LayoutHorizontalSpacing)
 
-    def verticalSpacing(self):
+    def vertical_spacing(self):
         if self._v_space >= 0:
             return self._v_space
         else:
-            return self._smartSpacing(QStyle.PM_LayoutVerticalSpacing)
+            return self._smart_spacing(QStyle.PM_LayoutVerticalSpacing)
 
     def expandingDirections(self):
         return Qt.Horizontal | Qt.Vertical
@@ -44,7 +46,7 @@ class FlowLayout(QLayout):
         return True
 
     def heightForWidth(self, width):
-        height = self._doLayout(QRect(0, 0, width, 0), True)
+        height = self._do_layout(QRect(0, 0, width, 0), True)
         return height
 
     def count(self):
@@ -56,7 +58,7 @@ class FlowLayout(QLayout):
         except IndexError:
             return None
 
-    def minimumsize(self):
+    def minimum_size(self):
         size = QSize()
         for item in self._item_list:
             size = size.expandedTo(item.minimumSize())
@@ -67,38 +69,38 @@ class FlowLayout(QLayout):
 
     def setGeometry(self, rect):
         super().setGeometry(rect)
-        self._doLayout(rect, False)
+        self._do_layout(rect, False)
 
     def sizeHint(self):
-        return self.minimumsize()
+        return self.minimum_size()
 
     def takeAt(self, idx):
-        if idx >= 0 and idx < self.count():
+        if 0 <= idx < self.count():
             return self._item_list.pop(idx)
         return None
 
-    def _doLayout(self, rect, test_only):
+    def _do_layout(self, rect, test_only):
         left, top, right, bottom = self.getContentsMargins()
-        effectiveRect = rect.adjusted(left, top, -right, -bottom)
-        x = effectiveRect.x()
-        y = effectiveRect.y()
+        effective_rect = rect.adjusted(left, top, -right, -bottom)
+        x = effective_rect.x()
+        y = effective_rect.y()
         line_height = 0
 
         for item in self._item_list:
             widget = item.widget()
-            space_x = self.horizontalSpacing()
+            space_x = self.horizontal_spacing()
             if space_x == -1:
-                space_x = widget.style().layoutSpacing(widget.sizePolicy(),
-                                                       widget.sizePolicy(),
+                space_x = widget.style().layoutSpacing(QSizePolicy.Label,
+                                                       QSizePolicy.Label,
                                                        Qt.Horizontal)
-            space_y = self.verticalSpacing()
+            space_y = self.vertical_spacing()
             if space_y == -1:
-                space_y = widget.style().layoutSpacing(widget.sizePolicy(),
-                                                       widget.sizePolicy(),
+                space_y = widget.style().layoutSpacing(QSizePolicy.Label,
+                                                       QSizePolicy.Label,
                                                        Qt.Vertical)
             next_x = x + item.sizeHint().width() + space_x
-            if next_x - space_x > effectiveRect.right() and line_height > 0:
-                x = effectiveRect.x()
+            if next_x - space_x > effective_rect.right() and line_height > 0:
+                x = effective_rect.x()
                 y = y + line_height + space_y
                 next_x = x + item.sizeHint().width() + space_x
                 line_height = 0
@@ -111,11 +113,10 @@ class FlowLayout(QLayout):
 
         return y + line_height - rect.y() + bottom
 
-    def _smartSpacing(self, pm):
+    def _smart_spacing(self, pm):
         if not self.parent():
             return -1
         elif self.parent().isWidgetType():
             return self.parent().style().pixelMetric(pm, None, self.parent())
         else:
             return self.parent().spacing()
-    

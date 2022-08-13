@@ -1,7 +1,11 @@
-
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QSpinBox, QComboBox, QDoubleSpinBox, QFormLayout, \
-    QDialogButtonBox, QRadioButton, QGroupBox, QVBoxLayout, QDialog
+    QDialogButtonBox, QRadioButton, QGroupBox, QVBoxLayout
+
+try:
+    from PyQt5.QtGui import QDialog
+except ImportError:
+    from PyQt5.QtWidgets import QDialog
 
 from dataclasses import dataclass
 
@@ -12,9 +16,11 @@ from scipy import signal
 
 from maths.maths_base import MathSpecBase
 
+
 class WindowTypes(Enum):
     MEDIAN = 0
     MEAN = 1
+
 
 @dataclass
 class RunningWindowParams:
@@ -22,17 +28,18 @@ class RunningWindowParams:
     window_sz: float
     is_ticks: bool
 
+
 class RunningWindowSpec(MathSpecBase):
 
     def __init__(self, parent):
         MathSpecBase.__init__(self, parent=parent, name="running mean/median")
 
-    def buttonCallback(self, checked):
-        self.createMessageBox()
+    def button_callback(self, checked):
+        self.create_message_box()
 
-    def getParams(self):
+    def get_params(self):
         # Create a dialog for getting the window parameters.
-        # Store results and then use them in the doMath method
+        # Store results and then use them in the do_math method
         # Items we need:
         #  1. Filter type (QComboBox)
         #  2. Window units (QRadioButton) - time or ticks?
@@ -69,8 +76,8 @@ class RunningWindowSpec(MathSpecBase):
 
         # Add some standard buttons (Cancel/Ok) at the bottom of the dialog
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
-                           Qt.Horizontal, param_dialog);
-        form.addRow(button_box);
+                                      Qt.Horizontal, param_dialog)
+        form.addRow(button_box)
         button_box.accepted.connect(param_dialog.accept)
         button_box.rejected.connect(param_dialog.reject)
 
@@ -84,8 +91,7 @@ class RunningWindowSpec(MathSpecBase):
 
         return False
 
-
-    def doMath(self, data, dt):
+    def do_math(self, data, dt):
         # First, determine the winodw size. if it's a time, we need to conver to ticks
         window_sz = self._params.window_sz
         if not self._params.is_ticks:
@@ -102,5 +108,5 @@ class RunningWindowSpec(MathSpecBase):
 
         return val
 
-    def defaultVarName(self, vname):
+    def default_var_name(self, vname):
         return f"RunningWindow({vname},{self._params.type.name.lower()},{self._params.window_sz},{int(self._params.is_ticks)})"

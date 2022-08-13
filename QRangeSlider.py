@@ -53,7 +53,7 @@ def scale(val, src, dst):
     """
     Scale the given value from the scale of src to the scale of dst.
     """
-    return (((val - src[0]) / float(src[1]-src[0])) * (dst[1]-dst[0]) + dst[0])
+    return ((val - src[0]) / float(src[1] - src[0])) * (dst[1] - dst[0]) + dst[0]
 
 
 class Ui_Form(object):
@@ -356,7 +356,7 @@ class QRangeSlider(QWidget, Ui_Form):
 
     def getRange(self):
         """:return: the start and end values as a tuple"""
-        return (self.start(), self.end())
+        return self.start(), self.end()
 
     def setRange(self, start, end):
         """set the start and end values"""

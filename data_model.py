@@ -4,10 +4,12 @@ from PyQt5.QtCore import QAbstractListModel, QModelIndex, QVariant, Qt
 
 import numpy as np
 
+
 class DataItem(object):
-    '''
+    """
         Data structure for storing data items in the list widget
-    '''
+    """
+
     def __init__(self, var_name, data):
         self._var_name = var_name
         self._data = data
@@ -33,41 +35,53 @@ class DataModel(QAbstractListModel):
     def __init__(self, data_loader, parent=None):
         QAbstractListModel.__init__(self, parent=parent)
 
-        self._raw_data = data_loader.dataFrame
+        self._raw_data = data_loader.data_frame
         self._data = []
         for var in sorted(self._raw_data.columns):
             self._data.append(DataItem(var, self._raw_data[var].to_numpy()))
 
         self._time = data_loader.time
-        # The `.item()` is necessary because we want a python type (float), not a numpy.dtype
-        self._t_min = min(self._time).item()
-        self._t_max = max(self._time).item()
         self._avg_dt = np.mean(np.diff(self._time)).item()
-        print(f"Loaded {data_loader.source} which has a dt of {self._avg_dt} sec and a sampling rate of {int(round(1/self._avg_dt))} Hz")
+        try:
+            freq = int(round(1 / self._avg_dt))
+        except ZeroDivisionError:
+            freq = 0
+        print(f"Loaded {data_loader.source} which has a dt of {self._avg_dt} sec and a sampling rate of {freq} Hz")
+
+        self._time_offset = 0
 
     @property
     def time(self):
-        return self._time
+        return self._time + self._time_offset
 
     @property
     def t_min(self):
-        return self._t_min
+        # The `.item()` is necessary because we want a python type (float), not a numpy.dtype
+        return min(self.time).item()
 
     @property
     def t_max(self):
-        return self._t_max
+        # The `.item()` is necessary because we want a python type (float), not a numpy.dtype
+        return max(self.time).item()
+
+    @property
+    def time_offset(self):
+        return self._time_offset
 
     @property
     def time_range(self):
-        return (self.t_min, self.t_max)
+        return self.t_min, self.t_max
 
     @property
     def tick_max(self):
-        return self._time.shape[0]
+        return self._time.shape[0] - 1
 
     @property
     def avg_dt(self):
         return self._avg_dt
+
+    def set_time_offset(self, time_offset):
+        self._time_offset = time_offset
 
     def rowCount(self, parent=QModelIndex()):
         return len(self._data)
@@ -82,7 +96,7 @@ class DataModel(QAbstractListModel):
             return self._data[index.row()]
         return QVariant()
 
-    def getDataByName(self, name):
+    def get_data_by_name(self, name):
         data = None
         try:
             data = self._raw_data[name]
