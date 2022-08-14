@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 
-#from PyQt5 import QtGui
+# from PyQt5 import QtGui
 from PyQt5.QtGui import QDrag
 from PyQt5.QtCore import QAbstractListModel, QModelIndex, QVariant, Qt, pyqtSignal, QMimeData
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QListView
-
 
 import numpy as np
 import pandas as pd
 import pickle
 import random
 
+
 class DataItem(object):
-    '''
+    """
         Data structure for storing data items in the list widget
-    '''
+    """
+
     def __init__(self, var_name, data):
         self._var_name = var_name
         self._data = data
@@ -70,24 +71,22 @@ class DataFileWidget(QWidget):
 
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
-        self.tabs.tabCloseRequested.connect(self.closeFile)
+        self.tabs.tabCloseRequested.connect(self.close_file)
         layout.addWidget(self.tabs)
 
-    def openFile(self, filename):
+    def open_file(self, filename):
         var_list = VarListWidget(self, filename)
         # Create a new tab and add the varListWidget to it.
         self.tabs.addTab(var_list, filename)
         self.tabs.setCurrentWidget(var_list)
 
-    def closeFile(self, index):
+    def close_file(self, index):
         # Add function for closing the tab here.
         self.tabs.widget(index).close()
         self.tabs.removeTab(index)
 
 
-
 class VarListWidget(QListView):
-
     onClose = pyqtSignal()
 
     def __init__(self, parent, filename):
@@ -118,10 +117,10 @@ class VarListWidget(QListView):
         # selected.file = self;
 
         bstream = pickle.dumps(selected)
-        mimeData = QMimeData()
-        mimeData.setData("application/x-DataItem", bstream)
+        mime_data = QMimeData()
+        mime_data.setData("application/x-DataItem", bstream)
 
         drag = QDrag(self)
-        drag.setMimeData(mimeData)
+        drag.setMimeData(mime_data)
 
         result = drag.exec()

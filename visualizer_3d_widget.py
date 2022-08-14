@@ -97,6 +97,9 @@ class Visualizer3DWidget(GLViewWidget):
     def __init__(self, parent=None, source=None):
         GLViewWidget.__init__(self, parent=parent)
 
+        self.kin_data = None
+        self.kin_model = None
+        self._source = None
         self.setMinimumSize(320, 240)
         self.resize(640, 480)
 

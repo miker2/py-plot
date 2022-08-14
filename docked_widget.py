@@ -8,6 +8,9 @@ class DockedWidget(QDockWidget):
     def __init__(self, name, parent):
         QDockWidget.__init__(self, name, parent=parent)
 
+        self._docked_size = None
+        self._undocked_size = None
+        self._undocked_pos = None
         self._settings_read = False  # a hack until I can sort out the sizing logic
         self.topLevelChanged.connect(self._on_dock_state_change)
 

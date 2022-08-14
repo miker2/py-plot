@@ -1,8 +1,8 @@
 from PyQt5.QtCore import pyqtProperty, QRect, QPoint
 from PyQt5.QtCore import pyqtSignal, pyqtSlot
-from PyQt5.QtWidgets import QAbstractSlider, QSlider, QStyle
-from PyQt5.QtWidgets import QStylePainter, QStyleOptionSlider, QStyleFactory
-from PyQt5.QtGui import QPen, QPalette, QLinearGradient
+from PyQt5.QtGui import QAbstractSlider, QSlider, QStyle
+from PyQt5.QtGui import QStylePainter, QStyleOptionSlider
+from PyQt5.QtGui import QPen, QPalette, QLinearGradient, QStyleFactory
 import PyQt5.QtCore as QtCore
 
 

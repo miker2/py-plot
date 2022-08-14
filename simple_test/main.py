@@ -12,6 +12,7 @@ from data import DataItem
 
 from CustomPlotItem import CustomPlotItem
 
+
 class PlotTool(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
@@ -22,7 +23,7 @@ class PlotTool(QMainWindow):
 
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
-        
+
         layout = QHBoxLayout(main_widget)
 
         data_file_widget = DataFileWidget(self)
@@ -31,14 +32,15 @@ class PlotTool(QMainWindow):
         layout.addWidget(MyPlotWidget())
 
         # Set up two "files"
-        data_file_widget.openFile("test_data1.csv")
-        data_file_widget.openFile("test_data2.csv")
-        data_file_widget.openFile("test_data3.csv")
+        data_file_widget.open_file("test_data1.csv")
+        data_file_widget.open_file("test_data2.csv")
+        data_file_widget.open_file("test_data3.csv")
 
-        
+
 class MyPlotWidget(QWidget):
-    COLORS=('#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00', '#a65628', '#D4C200', '#f781bf')
-    PEN_WIDTH=2
+    COLORS = ('#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#a65628', '#D4C200', '#f781bf')
+    PEN_WIDTH = 2
+
     def __init__(self):
         QWidget.__init__(self)
 
@@ -57,7 +59,7 @@ class MyPlotWidget(QWidget):
         self.setAcceptDrops(True)
         self.pw.setAcceptDrops(True)
 
-        #self.pw.getPlotItem().addLegend()
+        # self.pw.getPlotItem().addLegend()
 
         self.cidx = 0
 
@@ -73,22 +75,23 @@ class MyPlotWidget(QWidget):
         selected = pickle.loads(bstream)
 
         name = f"{e.source().filename} : {selected.var_name}"
-        
+
         print(type(selected.data))
         item = self.pw.getPlotItem().plot(x=selected.time.to_numpy(),
                                           y=selected.data.to_numpy(),
-                                          pen=pg.mkPen(color=self._getColor(self.cidx),
+                                          pen=pg.mkPen(color=self._get_color(self.cidx),
                                                        width=self.PEN_WIDTH),
                                           name=name)
         label = CustomPlotItem(self, item, 0)
-        self._labels.insertWidget(self._labels.count()-1, label)
-        e.source().onClose.connect(lambda : self.removeItem(item, label))
-        
+        self._labels.insertWidget(self._labels.count() - 1, label)
+        e.source().onClose.connect(lambda: self.remove_item(item, label))
+
         self.pw.autoRange()
         self.cidx += 1
         e.accept()
 
-    def makeLabel(self, plot_item):
+    @staticmethod
+    def make_label(plot_item):
         label = QLabel(plot_item.name())
         label.setSizePolicy(QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed))
 
@@ -99,19 +102,21 @@ class MyPlotWidget(QWidget):
 
         return label
 
-    def removeItem(self, item, label, update_color=True):
+    def remove_item(self, item, label, update_color=True):
         self.pw.removeItem(item)
         self._labels.removeWidget(label)
         # self._labels.takeAt(self._labels.indexOf(label))
         label.close()
         print(self._labels.count())
-        self.cidx = max(0, self.cidx-1)
+        self.cidx = max(0, self.cidx - 1)
 
         for i in range(self._labels.count() - 1):
-            trace = self._labels.itemAt(i).widget().updateColor(self._getColor(i))
+            trace = self._labels.itemAt(i).widget().updateColor(self._get_color(i))
 
-    def _getColor(self, idx):
+    @staticmethod
+    def _get_color(idx):
         return MyPlotWidget.COLORS[idx % len(MyPlotWidget.COLORS)]
+
 
 if __name__ == "__main__":
     MainEventThread = QApplication([])

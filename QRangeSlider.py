@@ -1,7 +1,6 @@
 __author__ = "Ryan Galloway <ryan@rsgalloway.com>"
 __version__ = "0.1.1"
 
-
 # ---------------------------------------------------------------------------------------------
 # SUMMARY
 # ---------------------------------------------------------------------------------------------
@@ -159,7 +158,7 @@ class Handle(Element):
         _mx = getattr(self, '__mx', None)
         vrange = self.main.max() - self.main.min()
         size = self.main.width()
-        step = vrange/size
+        step = vrange / size
         if not _mx:
             setattr(self, '__mx', mx)
             dx = 0
@@ -286,7 +285,7 @@ class QRangeSlider(QWidget, Ui_Form):
         self.setMax(99.)
         self.setStart(0.)
         self.setEnd(99.)
-        #self.setDrawValues(True)
+        # self.setDrawValues(True)
         self.setDrawValues(False)
 
     def min(self):
@@ -367,11 +366,11 @@ class QRangeSlider(QWidget, Ui_Form):
         """overrides key press event to move range left and right"""
         key = event.key()
         if key == QtCore.Qt.Key_Left:
-            s = self.start()-1
-            e = self.end()-1
+            s = self.start() - 1
+            e = self.end() - 1
         elif key == QtCore.Qt.Key_Right:
-            s = self.start()+1
-            e = self.end()+1
+            s = self.start() + 1
+            e = self.end() + 1
         else:
             event.ignore()
             return

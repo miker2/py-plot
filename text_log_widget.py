@@ -48,14 +48,14 @@ class DockedTextLogWidget(QDockWidget):
         debug_idx = self._filter_list.findText(tld.Severity.Debug.name)
         self._filter_list.setCurrentIndex(debug_idx)
 
-        self._filter_list.currentIndexChanged.connect(self._setMaxSeverity)
+        self._filter_list.currentIndexChanged.connect(self._set_max_severity)
 
         hbox.addWidget(self._filter_list)
 
         self._reverse_sync = QCheckBox("Reverse sync")
         self._reverse_sync.setToolTip("When checked, clicking on an entry in the text log\n" +
                                       "will move the time cursor in the plot area.")
-        self._reverse_sync.stateChanged.connect(self._text_log.setReverseSync)
+        self._reverse_sync.stateChanged.connect(self._text_log.set_reverse_sync)
         self._reverse_sync.setChecked(True)
         hbox.addWidget(self._reverse_sync)
 
@@ -65,11 +65,11 @@ class DockedTextLogWidget(QDockWidget):
         self.setWidget(widget)
 
     @property
-    def hasSource(self):
-        return self._text_log.hasSource
+    def has_source(self):
+        return self._text_log.has_source
 
-    def setSource(self, source):
-        self._text_log.setSource(source)
+    def set_source(self, source):
+        self._text_log.set_source(source)
 
     def closeEvent(self, event):
         self._text_log.close()
@@ -79,8 +79,8 @@ class DockedTextLogWidget(QDockWidget):
     def update(self, tick):
         self._text_log.update(tick)
 
-    def _setMaxSeverity(self, idx):
-        self._text_log.setMaxSeverity(tld.Severity[self._filter_list.itemText(idx)])
+    def _set_max_severity(self, idx):
+        self._text_log.set_max_severity(tld.Severity[self._filter_list.itemText(idx)])
 
 
 class TextLogWidget(QTableView):
@@ -89,6 +89,7 @@ class TextLogWidget(QTableView):
 
         # This proxy model is an intermediary between the original model and the view. It
         # creates a new model from the original model based on the filter settings.
+        self._source = None
         self._proxy_model = SeverityFilterProxyModel(self)
         # Initialize the proxy model to none. This will get updated when the source is set.
         self._proxy_model.setSourceModel(None)
@@ -98,7 +99,7 @@ class TextLogWidget(QTableView):
         selection_model = QItemSelectionModel(self._proxy_model)
         self.setSelectionModel(selection_model)
 
-        self.setSource(source)
+        self.set_source(source)
 
         self.clicked.connect(self.itemClicked)
 
@@ -118,7 +119,7 @@ class TextLogWidget(QTableView):
 
         self.setItemDelegate(SelectedItemDelegate())
 
-    def setSource(self, source):
+    def set_source(self, source):
         self._source = source
         if self._source:
 
@@ -139,16 +140,16 @@ class TextLogWidget(QTableView):
             self.setColumnHidden(TextLogEntry.Severity, True)
             self.resizeColumnsToContents()
 
-            self._source.onClose.connect(self._removeSource)
+            self._source.onClose.connect(self._remove_source)
 
             if hasattr(self, "_idx") and self._idx:
                 self.update(self._idx)
 
     @property
-    def hasSource(self):
+    def has_source(self):
         return self._source is not None
 
-    def _removeSource(self):
+    def _remove_source(self):
         self._source = None
 
     def update(self, tick):
@@ -199,10 +200,10 @@ class TextLogWidget(QTableView):
             print(f"[{type(self).__name__}] Selection is at tick {tick}.")
             self.update(tick)
 
-    def setMaxSeverity(self, severity):
+    def set_max_severity(self, severity):
         self._proxy_model.set_max_severity(severity)
 
-    def setReverseSync(self, state):
+    def set_reverse_sync(self, state):
         self._do_reverse_sync = bool(state)
 
 
@@ -221,7 +222,7 @@ class SelectedItemDelegate(QStyledItemDelegate):
                 text_color = palette.brush(QPalette.Text)
                 text_weight = QFont.DemiBold
             item_option.palette.setBrush(QPalette.HighlightedText, text_color)
-            # Now make the text bold so we know which rows are selected.
+            # Now make the text bold so that we know which rows are selected.
             item_option.font.setWeight(text_weight)
 
             # If the model provides a background color, use it.

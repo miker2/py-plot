@@ -35,8 +35,8 @@ class DataFileWidget(QWidget):
         # TODO(rose@): Enable this when the filename is embedded in the VarListWidget
         # self.tabs.setTabBarAutoHide(True)
         self.tabs.tabCloseRequested.connect(self.close_file)
-        self.tabs.customContextMenuRequested.connect(self.on_context_menu_request)
-        self.tabs.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tabs.tabBar().customContextMenuRequested.connect(self.on_context_menu_request)
+        self.tabs.tabBar().setContextMenuPolicy(Qt.CustomContextMenu)
         self.tabs.currentChanged.connect(lambda x: self.tabChanged.emit())
         layout.addWidget(self.tabs)
 
@@ -98,7 +98,7 @@ class DataFileWidget(QWidget):
     def on_context_menu_request(self, pos):
         # We only want to bring up the context menu when an actual tab is right-clicked. Check that
         # the click position is inside the tab bar
-        if self.tabs.tabBar().geometry().contains(pos):
+        if self.tabs.tabBar().rect().contains(pos):
             # Figure out specifically which tab was right-clicked:
             tab_idx = self.tabs.tabBar().tabAt(pos)
 
