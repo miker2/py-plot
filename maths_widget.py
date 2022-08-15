@@ -87,7 +87,7 @@ class MathsWidget(QWidget):
 
         self.var_out = QListWidget()
         self.var_out.setDragEnabled(True)
-        setattr(self.var_out, 'start_drag', self.start_drag)
+        setattr(self.var_out, 'startDrag', self.start_drag)
         io_layout = QHBoxLayout()
         io_layout.addWidget(self.var_in)
         io_layout.addWidget(self.var_out)
