@@ -1,0 +1,23 @@
+name: py-plot
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - numpy
+  - numpy-stl
+  - pandas
+  - pinocchio
+  - pip
+  - pyarrow
+  - pyopengl
+  - pyparsing
+  - pyqt=5.15
+  - pyqtgraph
+  - python=3.10
+  - scipy
+  - shtab
+  - urdfpy
+  - pip:
+    - py-expression-eval
+    - pywavefront
+
