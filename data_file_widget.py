@@ -287,7 +287,7 @@ class GenericCSVLoader(FileLoader):
         try:
             self._df = pd.read_csv(filename)
             # Assume there is a 'time' column. If not, we'll ask the user
-            self._time = self._df['time']
+            self._time = self._df['time'].astype(np.float64, copy=True)
         except KeyError:
             # Ask the user which column to use for time
             ok, time = time_selector_dialog(caller, self._df)

@@ -50,7 +50,7 @@ class PlotManager(QWidget):
         self.range_slider.setMin(0.)
         # large number here is sort of a hack for now so the plot x-axis resizes properly on the
         # first file load.
-        self.range_slider.setMax(1000.)
+        self.range_slider.setMax(1.e9)
         self.range_slider.setRange(self.range_slider.min(), self.range_slider.max())
 
         self.range_slider.startValueChanged.connect(self.update_plot_xrange)
