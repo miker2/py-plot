@@ -286,8 +286,13 @@ class GenericCSVLoader(FileLoader):
 
         try:
             self._df = pd.read_csv(filename)
-            # Assume there is a 'time' column. If not, we'll ask the user
-            self._time = self._df['time'].astype(np.float64, copy=True)
+
+            if 'time' in self._df.columns:
+                # Assume there is a 'time' column. If not, we'll ask the user
+                self._time = self._df['time'].astype(np.float64, copy=True)
+            else:
+                # Try reading a time in nanoseconds and convert to seconds
+                self._time = self._df['time_ns'].astype(np.float64, copy=True) * 1e-9
         except KeyError:
             # Ask the user which column to use for time
             ok, time = time_selector_dialog(caller, self._df)
