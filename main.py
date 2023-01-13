@@ -9,13 +9,15 @@ import pyqtgraph as pg
 from data_file_widget import DataFileWidget
 from plot_manager import PlotManager
 
-try:
-    from visualizer_3d_widget import DockedVisualizer3DWidget
+from visualizer_3d_widget import DockedVisualizer3DWidget
+_visualizer_available = True
+# try:
+#     from visualizer_3d_widget import DockedVisualizer3DWidget
 
-    _visualizer_available = True
-except ImportError:
-    DockedVisualizer3DWidget = None
-    _visualizer_available = False
+#     _visualizer_available = True
+# except ImportError:
+#     DockedVisualizer3DWidget = None
+#     _visualizer_available = False
 
 from maths_widget import DockedMathsWidget
 from text_log_widget import DockedTextLogWidget
@@ -177,6 +179,8 @@ class PyPlot(QMainWindow):
             self.visualizer_3d_action.setCheckable(True)
             self.visualizer_3d_action.triggered.connect(self.create_visualizer_window)
             tool_menu.addAction(self.visualizer_3d_action)
+        else:
+            print("3D visualizer not available.")
 
         self.maths_widget_action = QAction("Show maths widget", self)
         self.maths_widget_action.setStatusTip('Show the math widget')
@@ -194,7 +198,8 @@ class PyPlot(QMainWindow):
         if is_checked:
             if not self.visualizer_3d:
                 # Create the window
-                source = self.data_file_widget.get_first_supervisor_log()
+                # source = self.data_file_widget.get_first_supervisor_log()
+                source = self.data_file_widget.get_active_data_file()
                 self.visualizer_3d = DockedVisualizer3DWidget(self, source)
                 self.addDockWidget(Qt.RightDockWidgetArea, self.visualizer_3d)
 
@@ -216,7 +221,9 @@ class PyPlot(QMainWindow):
         # Below code is called by every widget and modifies every widget
         # TODO: make more efficient
         if self.visualizer_3d and not self.visualizer_3d.has_source:
-            self.visualizer_3d.set_source(self.data_file_widget.get_first_supervisor_log())
+            self.visualizer_3d.set_source(self.data_file_widget.get_active_data_file())
+            # self.visualizer_3d.set_source(self.data_file_widget.get_first_supervisor_log())
+
         # if self.text_log_widget and not self.text_log_widget.has_source:
         #    self.text_log_widget.set_source(self.data_file_widget.get_active_data_file())
 
