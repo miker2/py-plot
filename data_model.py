@@ -96,6 +96,9 @@ class DataModel(QAbstractListModel):
             return self._data[index.row()]
         return QVariant()
 
+    def has_key(self, name):
+        return name in self._raw_data.index
+
     def get_data_by_name(self, name):
         data = None
         try:
