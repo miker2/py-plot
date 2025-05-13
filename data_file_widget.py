@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QTabWidget, QMess
 from filter_box_widget import FilterBoxWidget
 from var_list_widget import VarListWidget
 
+import csv
 import math
 import numpy as np
 import os
@@ -22,6 +23,8 @@ pyarrow = install_and_import("pyarrow")
 class DataFileWidget(QWidget):
     countChanged = pyqtSignal()
     tabChanged = pyqtSignal()
+    fileOpened = pyqtSignal([int], [str])
+    fileClosed = pyqtSignal(str)
 
     def __init__(self, parent):
         QWidget.__init__(self, parent=parent)
@@ -47,47 +50,60 @@ class DataFileWidget(QWidget):
                                    '.bin': BinaryFileLoader,  # pybullet
                                    '.csv': GenericCSVLoader}
 
+        self.sources = dict()
+        self.latest_data_file_name = None
+
     @property
     def open_count(self):
         return self.tabs.count()
 
     def open_file(self, filepath):
+        filepath = os.path.abspath(filepath)
         ext = os.path.splitext(filepath)[-1]
         loader = self._fileloader_module[ext](self, filepath)
         if not loader.success:
             # File didn't finish loading. Nothing else to do.
             return
         var_list = VarListWidget(self, loader)
-        tab_name = filepath.split('/')[-1]
+        tab_name = os.path.basename(filepath)
         # Create a new tab and add the varListWidget to it.
+        self.latest_data_file_name = filepath
         self.tabs.addTab(var_list, tab_name)
+        self.sources[filepath] = self.tabs.widget(self.tabs.count() - 1)
         self.tabs.setCurrentWidget(var_list)
         self._update_range_slider()
 
         var_list.timeChanged.connect(self._update_range_slider)
 
         self.countChanged.emit()
+        self.fileOpened[str].emit(filepath)
+        self.fileOpened[int].emit(self.tabs.currentIndex())
 
     def close_file(self, index):
         # Add function for closing the tab here.
+        filename = self.tabs.widget(index).filename
         self.tabs.widget(index).close()
         self.tabs.removeTab(index)
         if self.tabs.count() > 0:
             self._update_range_slider()
 
         self.countChanged.emit()
+        self.fileClosed[str].emit(filename)
 
     def get_active_data_file(self):
         return self.tabs.currentWidget()
 
+    def get_latest_data_file_name(self):
+        return self.latest_data_file_name
+
     def get_data_file(self, idx):
         return self.tabs.widget(idx)
 
-    def get_first_supervisor_log(self):
-        for idx in range(self.tabs.count()):
-            if self.get_data_file(idx).is_supervisor_log:
-                return self.get_data_file(idx)
-        return None
+    def get_data_file_by_name(self, name):
+        return self.sources[name]
+
+    def get_sources(self):
+        return self.sources
 
     def get_time(self, idx=0):
         if self.tabs.count() == 0:
@@ -284,8 +300,19 @@ class GenericCSVLoader(FileLoader):
     def __init__(self, caller, filename):
         FileLoader.__init__(self, filename)
 
+        # Ensure the csv file is not malformed. Oddly, pandas does not do a good job of this.
+        with open(filename, 'r') as csvfile:
+            reader = csv.reader(csvfile, delimiter=',')
+            header = reader.__next__()
+            expected_cols = len(header)
+            for i, row in enumerate(reader):
+                if len(row) != expected_cols:
+                    QMessageBox.critical(caller, "Unable to load file",
+                                         f"Malformed CSV file at line {i + 2}. Expected {expected_cols} columns, found {len(row)}")
+                    return
+
         try:
-            self._df = pd.read_csv(filename)
+            self._df = pd.read_csv(filename, on_bad_lines='error', na_filter=True)
 
             if 'time' in self._df.columns:
                 # Assume there is a 'time' column. If not, we'll ask the user

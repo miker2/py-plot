@@ -17,6 +17,7 @@ dependencies:
   - scipy
   - shtab
   - urdfpy
+  - commentjson
   - pip:
     - py-expression-eval
     - pywavefront

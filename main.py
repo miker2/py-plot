@@ -1,15 +1,15 @@
 # This Python file uses the following encoding: utf-8
-from PyQt5.QtWidgets import QApplication, QMainWindow, QSplitter, \
-    QFileDialog, QAction, QMessageBox, QLabel
-from PyQt5.QtGui import QKeyEvent, QIcon
-from PyQt5.QtCore import Qt, QCoreApplication, QSettings, QSize, QPoint
-
 import pyqtgraph as pg
+from PyQt5.QtCore import (QCoreApplication, QPoint, QSettings, QSize, Qt,
+                          pyqtSlot)
+from PyQt5.QtGui import QIcon, QKeyEvent
+from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QLabel,
+                             QMainWindow, QMessageBox, QSplitter)
 
 from data_file_widget import DataFileWidget
 from plot_manager import PlotManager
-
 from visualizer_3d_widget import DockedVisualizer3DWidget
+
 _visualizer_available = True
 # try:
 #     from visualizer_3d_widget import DockedVisualizer3DWidget
@@ -19,16 +19,17 @@ _visualizer_available = True
 #     DockedVisualizer3DWidget = None
 #     _visualizer_available = False
 
-from maths_widget import DockedMathsWidget
-from text_log_widget import DockedTextLogWidget
-
+import argparse
 import os
 import sys
 from pathlib import Path
-import json
-import argparse
+
+import commentjson as json
 
 from imports import install_and_import
+from maths_widget import DockedMathsWidget
+from preferences_dialog import PreferencesDialog
+from text_log_widget import DockedTextLogWidget
 
 shtab = install_and_import("shtab")
 
@@ -59,6 +60,7 @@ class PyPlot(QMainWindow):
         QMainWindow.__init__(self)
 
         QCoreApplication.setApplicationName(__APP_NAME__)
+        QCoreApplication.setOrganizationName(__APP_NAME__)
 
         self.setMinimumSize(QSize(640, 480))
         self.setWindowTitle(QCoreApplication.applicationName())
@@ -99,6 +101,8 @@ class PyPlot(QMainWindow):
         self.plot_manager.timeValueChanged.connect(tick_time_indicator.update_time)
         self.statusBar().addPermanentWidget(tick_time_indicator)
 
+        self._settings = QSettings()
+
         self._read_settings()
 
     def setup_menu_bar(self):
@@ -114,6 +118,10 @@ class PyPlot(QMainWindow):
         open_action.setStatusTip("Open a data file")
         open_action.triggered.connect(self.open_file_dialog)
 
+        preferences_action = QAction("&Preferences ...", self)
+        preferences_action.setStatusTip("Set application preferences")
+        preferences_action.triggered.connect(self.update_settings)
+
         exit_action = QAction("&Quit", self)
         exit_action.setShortcut("Ctrl+Q")
         exit_action.setStatusTip('Leave The App')
@@ -122,6 +130,7 @@ class PyPlot(QMainWindow):
         main_menu = self.menuBar()
         file_menu = main_menu.addMenu('&File')
         file_menu.addAction(open_action)
+        file_menu.addAction(preferences_action)
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
 
@@ -198,34 +207,32 @@ class PyPlot(QMainWindow):
         if is_checked:
             if not self.visualizer_3d:
                 # Create the window
-                # source = self.data_file_widget.get_first_supervisor_log()
-                source = self.data_file_widget.get_active_data_file()
-                self.visualizer_3d = DockedVisualizer3DWidget(self, source)
+                # Make a shallow copy of the sources dictionary.
+                sources = {k:v for k,v in self.data_file_widget.get_sources().items()}
+                self.visualizer_3d = DockedVisualizer3DWidget(self, sources)
                 self.addDockWidget(Qt.RightDockWidgetArea, self.visualizer_3d)
 
-                # We can't assign a value to a variable in a lambda, so we'll define a small
-                # function here.
+                # We can't assign a value to a variable in a lambda, so we'll define small
+                # helper functions here.
+                @pyqtSlot(str)
+                def on_open(filename):
+                    data_file = self.data_file_widget.get_data_file_by_name(filename)
+                    self.visualizer_3d.set_source(filename, data_file)
+
+                @pyqtSlot()
                 def on_close():
                     self.visualizer_3d_action.setChecked(False)
                     self.visualizer_3d = None
 
-                self.visualizer_3d.onClose.connect(on_close)
-                self.data_file_widget.countChanged.connect(self.connect_source_to_widget_maybe)
+                # Connect the various signals to the visualizer slots
+                self.data_file_widget.fileOpened[str].connect(on_open)
                 self.plot_manager.tickValueChanged.connect(self.visualizer_3d.update)
+                self.visualizer_3d.onClose.connect(on_close)
+
             else:
                 self.visualizer_3d.show()
         else:
             self.visualizer_3d.hide()
-
-    def connect_source_to_widget_maybe(self):
-        # Below code is called by every widget and modifies every widget
-        # TODO: make more efficient
-        if self.visualizer_3d and not self.visualizer_3d.has_source:
-            self.visualizer_3d.set_source(self.data_file_widget.get_active_data_file())
-            # self.visualizer_3d.set_source(self.data_file_widget.get_first_supervisor_log())
-
-        # if self.text_log_widget and not self.text_log_widget.has_source:
-        #    self.text_log_widget.set_source(self.data_file_widget.get_active_data_file())
 
     def create_or_destroy_math_widget(self, is_checked):
         if is_checked:
@@ -291,32 +298,30 @@ class PyPlot(QMainWindow):
         settings.sync()
 
     def _read_settings(self):
-        settings = QSettings()
-
-        settings.beginGroup("MainWindow")
-        self.resize(settings.value("size", QSize(640, 480)))
-        self.move(settings.value("position", QPoint(200, 200)))
-        window_state = int(settings.value("window_state", Qt.WindowNoState))
+        self._settings.beginGroup("MainWindow")
+        self.resize(self._settings.value("size", QSize(640, 480)))
+        self.move(self._settings.value("position", QPoint(200, 200)))
+        window_state = int(self._settings.value("window_state", Qt.WindowNoState))
         if window_state & Qt.WindowMaximized:
             print("Setting window to maximized.")
             self.showMaximized()
         elif window_state & Qt.WindowFullScreen:
             print("Setting window to full-screen.")
             self.showFullScreen()
-        show_3d_viz = bool(int(settings.value("show_3d_viz", 0)))
+        show_3d_viz = bool(int(self._settings.value("show_3d_viz", 0)))
         if show_3d_viz:
             self.visualizer_3d_action.setChecked(True)
             self.create_visualizer_window(True)
-        show_maths = bool(int(settings.value("show_maths", 0)))
+        show_maths = bool(int(self._settings.value("show_maths", 0)))
         if show_maths:
             self.maths_widget_action.setChecked(True)
             self.create_or_destroy_math_widget(True)
-        show_text_log = bool(int(settings.value("show_text_log", 0)))
+        show_text_log = bool(int(self._settings.value("show_text_log", 0)))
         if show_text_log:
             self.show_text_logs_action.setChecked(True)
             self.create_or_destroy_text_log_widget(True)
 
-        settings.endGroup()
+        self._settings.endGroup()
 
     def closeEvent(self, event):
         self._write_settings()
@@ -347,9 +352,23 @@ class PyPlot(QMainWindow):
     def close_app(self):
         self.close()
 
+    def _get_last_dir(self, name) -> str:
+        self._settings.beginGroup("UserCache")
+        dir = self._settings.value(name, os.path.join(__BASE_DIR__, ".."))
+        self._settings.endGroup()
+        return dir
+
+    def _set_last_dir(self, name, value):
+        self._settings.beginGroup("UserCache")
+        self._settings.setValue(name, value)
+        self._settings.endGroup()
+
     def open_file_dialog(self):
+        # Get the last opened log directory
+        dir = self._get_last_dir("last_log_dir")
+
         fname, _ = QFileDialog.getOpenFileName(self, "Open log file",
-                                               __BASE_DIR__ + "/..",
+                                               dir,
                                                "Log files (*.bin *.txt *.csv *.parquet)")
         # Try setting the "DontUseNativeDialog" option to suppress the GtkDialog warning :(
         self.open_file(fname)
@@ -358,10 +377,18 @@ class PyPlot(QMainWindow):
         if len(filename) > 0:
             self.statusBar().showMessage(f"Opening {filename}", 5000)
             self.data_file_widget.open_file(filename)
+            self._set_last_dir("last_log_dir", os.path.dirname(filename))
+
+    def update_settings(self):
+        prefs = PreferencesDialog(parent=self)
+        if prefs.exec():
+            prefs.saveSettings()
 
     def save_plotlist(self):
+        dir = self._get_last_dir("last_plotlist_dir")
+        default_fname = os.path.join(dir, f"default.{_PLOTLIST_EXT}")
         fname, _ = QFileDialog.getSaveFileName(self, "Save plotlist",
-                                               __BASE_DIR__ + "/analysis/default.plotlist",
+                                               default_fname,
                                                f"Plotlist files (*.{_PLOTLIST_EXT} *.{_PLOTLIST_EXT.upper()})",
                                                f"*.{_PLOTLIST_EXT}")
 
@@ -377,6 +404,8 @@ class PyPlot(QMainWindow):
         with open(fname, 'w') as fp:
             print(plotlist, file=fp)
 
+        self._set_last_dir("last_plotlist_dir", os.path.dirname(fname))
+
     def load_plotlist(self, all_files=False, append=False, new_tab=False):
         # Get the data source and ensure that a file is actually open before asking the user to
         # select the desired plotlist file.
@@ -387,8 +416,10 @@ class PyPlot(QMainWindow):
                                  "You must open a file before loading a plotlist.")
             return
 
+        dir = self._get_last_dir("last_plotlist_dir")
+        default_fname = os.path.join(dir, f"default.{_PLOTLIST_EXT}")
         fname, _ = QFileDialog.getOpenFileName(self, "Load plotlist",
-                                               __BASE_DIR__ + f"/analysis/default.{_PLOTLIST_EXT}",
+                                               default_fname,
                                                f"Plotlist files (*.{_PLOTLIST_EXT} *.{_PLOTLIST_EXT.upper()})")
 
         if not fname:
@@ -396,6 +427,7 @@ class PyPlot(QMainWindow):
             return
         with open(fname) as fp:
             plotlist = json.load(fp)
+        self._set_last_dir("last_plotlist_dir", os.path.dirname(fname))
 
         if new_tab:
             self.plot_manager.add_plot_tab()

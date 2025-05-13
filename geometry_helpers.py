@@ -9,9 +9,9 @@ def axis_angle_from_quat(quat):
 
     rotvec = rotation.as_rotvec(degrees=True)
     angle = np.linalg.norm(rotvec)
-    try:
-        axis = rotvec / np.linalg.norm(rotvec)
-    except Exception as ex:
+    if angle > 1e-5:
+        axis = rotvec / angle
+    else:
         axis = np.array([0, 0, 1])
     return axis, angle
 
