@@ -97,7 +97,7 @@ class DataModel(QAbstractListModel):
         return QVariant()
 
     def has_key(self, name):
-        return name in self._raw_data.index
+        return name in self._raw_data.columns
 
     def get_data_by_name(self, name):
         data = None

@@ -1,11 +1,30 @@
 {
-  "geom_name":{
-    "type": "sphere",
-    "data": {
-      "color": [0.3, 0.3, 0.3, 1],
-      "radius": 0.05,
-      "pos_pattern": "var_name.{}",
-      "pos_names": ["x", "y", "z"]
+  "sources": [
+     {
+      "name": "obs_buffer_env_1_sphere.csv",
+      "geometry": {
+      "com": {
+        "type": "sphere",
+        "data": {
+          "color": [0.3, 0.3, 0.3, 1],
+          "radius": "sphere.radius",
+          "pos_pattern": "sphere.pos.{}",
+          "pos_names": ["x", "y", "z"]
+        }
+      },
+
+      "hand": {
+        "type": "robot",
+        "data": {
+          "urdf_path": "neo_right_hand_v3_0_1.urdf",
+          "joint_pattern": "{}.q",
+          "base_pos_pattern": "hand.pos.{}",
+          "base_pos_names": ["x", "y", "z"],
+          "base_quat_pattern": "hand.quat.{}",
+          "base_quat_names": ["x", "y", "z", "w"]
+        }
+      }
+      }
     }
-  }
+  ]
 }

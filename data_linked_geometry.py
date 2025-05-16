@@ -55,7 +55,7 @@ class DataLinkedRobotModel(DataLinkedGeometry):
                 quat = [self._get_value_at_tick(tick, name) for name in self.base_quat_names]
                 axis, angle = axis_angle_from_quat(quat)
                 self._geom.rotate(angle, *axis)
-
+                # import ipdb;ipdb.set_trace()
                 # Translate
                 self._geom.translate(*[self._get_value_at_tick(tick, name) for name in self.base_pos_names])
 
@@ -66,9 +66,10 @@ class DataLinkedRobotModel(DataLinkedGeometry):
             self._geom.hide()
 
 class DataLinkedSphere(DataLinkedGeometry):
-    def __init__(self, data_source, *, pos_pattern, pos_names, color=(1., 1., 1., 1.), radius=0.05):
+    def __init__(self, data_source, *, pos_pattern, pos_names, radius, color=(1., 1., 1., 1.)):
         DataLinkedGeometry.__init__(self, data_source)
-        self._geom = create_sphere(radius, color)
+        self._radius = self._get_value_at_tick(0, radius)
+        self._geom = create_sphere(self._radius, color)
         self._pos_names = [pos_pattern.format(name) for name in pos_names]
 
     def update(self, tick):
@@ -82,9 +83,11 @@ class DataLinkedSphere(DataLinkedGeometry):
             self._geom.hide()
 
 class DataLinkedArrow(DataLinkedGeometry):
-    def __init__(self, data_source, *, pos_pattern, pos_names, color=(1., 1., 1., 1.), width=2, pos=(0, 0, 0), vec=(0, 0, 0)):
+    def __init__(self, data_source, *, pos_pattern, pos_names, vec_pattern, vec_names, color=(1., 1., 1., 1.), width=2):
         DataLinkedGeometry.__init__(self, data_source)
-        self._geom = create_arrow(color, width, pos, vec)
+        self._geom = create_arrow(color, width, (0, 0, 0), (0, 0, 0))
+        self._pos_names = [pos_pattern.format(name) for name in pos_names]
+        self._vec_names = [vec_pattern.format(name) for name in vec_names]
 
     def update(self, tick):
         if self.has_source():
