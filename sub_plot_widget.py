@@ -118,10 +118,21 @@ class SubPlotWidget(QWidget):
         return menu
 
     def dragEnterEvent(self, e):
-        if e.mimeData().hasFormat("application/x-customplotitem") or \
-           e.mimeData().hasFormat("application/x-DataItem"): # Keep existing functionality
-            e.acceptProposedAction() # Use acceptProposedAction for move/copy distinction
+        print("DEBUG: dragEnterEvent called.") # New debug print
+        if e.mimeData():
+            print(f"DEBUG: MimeData formats: {e.mimeData().formats()}") # New debug print
+            print(f"DEBUG: Has 'application/x-DataItem': {e.mimeData().hasFormat('application/x-DataItem')}") # New
+            print(f"DEBUG: Has 'application/x-customplotitem': {e.mimeData().hasFormat('application/x-customplotitem')}") # New
         else:
+            print("DEBUG: No MimeData found in event.") # New debug print
+        
+        # Existing logic:
+        if e.mimeData().hasFormat("application/x-customplotitem") or \
+           e.mimeData().hasFormat("application/x-DataItem"):
+            print("DEBUG: dragEnterEvent: Accepting event.") # New
+            e.acceptProposedAction()
+        else:
+            print("DEBUG: dragEnterEvent: Ignoring event.") # New
             e.ignore()
 
     def dragMoveEvent(self, e):
