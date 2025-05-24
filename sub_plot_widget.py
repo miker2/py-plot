@@ -1,6 +1,6 @@
 # This Python file uses the following encoding: utf-8
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMenu, QAction, QApplication
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMenu, QAction, QApplication, QFrame
 from PyQt5.QtCore import Qt, QVariant
 import pyqtgraph as pg
 from flow_layout import FlowLayout
@@ -70,6 +70,15 @@ class SubPlotWidget(QWidget):
 
         self.pw.scene().sigMouseClicked.connect(self._on_scene_mouse_click_event)
 
+        # Drop indicator for visual feedback during drag-and-drop of labels
+        self._drop_indicator = QFrame(self) 
+        self._drop_indicator.setFrameShape(QFrame.VLine)
+        self._drop_indicator.setFrameShadow(QFrame.Sunken)
+        self._drop_indicator.setStyleSheet("QFrame { background-color: black; border: none; }")
+        self._drop_indicator.setFixedWidth(2)
+        self._drop_indicator.hide()
+        self._drop_indicator.raise_()
+
     def move_cursor(self, time):
         self.cursor.setValue(time)
 
@@ -115,7 +124,89 @@ class SubPlotWidget(QWidget):
         else:
             e.ignore()
 
+    def dragMoveEvent(self, e):
+        if e.mimeData().hasFormat("application/x-customplotitem"):
+            if e.pos().y() < self.pw.geometry().top(): # Cursor is in the label area
+                target_height = 20 # Default/fallback height
+                marker_y = 0
+                marker_x = 0
+
+                if self._labels.count() > 0:
+                    drop_idx = self._get_drop_index(e.pos())
+                    
+                    # Determine reference widget for Y position and height
+                    # Use item at drop_idx, or last item if drop_idx is count (append)
+                    ref_idx_for_y = min(drop_idx, self._labels.count() - 1)
+                    if ref_idx_for_y < 0 : ref_idx_for_y = 0 # Ensure valid index if count became 0 mid-drag
+                    
+                    if self._labels.count() > 0 : # Re-check count as it might change due to external factors
+                        ref_widget_for_y = self._labels.itemAt(ref_idx_for_y).widget()
+                        if ref_widget_for_y:
+                             marker_y = ref_widget_for_y.geometry().top()
+                             target_height = ref_widget_for_y.geometry().height()
+                        else: # Should not happen if _labels is consistent with _traces
+                             self._drop_indicator.hide()
+                             e.acceptProposedAction()
+                             return
+                    else: # No labels, position at top of label area
+                        content_rect_top = self.contentsRect().top()
+                        marker_y = content_rect_top
+                        label_area_height = self.pw.geometry().top() - content_rect_top
+                        target_height = max(10, label_area_height if label_area_height > 0 else 20)
+
+
+                    if drop_idx == 0:
+                        first_item_widget = self._labels.itemAt(0).widget()
+                        if first_item_widget: # Check if widget exists
+                            marker_x = first_item_widget.geometry().left()
+                        else: # Fallback if no widget at index 0 somehow
+                            marker_x = self.contentsRect().left() + 2
+                    elif drop_idx == self._labels.count():
+                        last_item_widget = self._labels.itemAt(drop_idx - 1).widget()
+                        if last_item_widget: # Check if widget exists
+                             marker_x = last_item_widget.geometry().right()
+                        else: # Fallback if no widget at last index somehow
+                            marker_x = self.contentsRect().left() + 2 # Default to start
+                    else:
+                        prev_item_widget = self._labels.itemAt(drop_idx - 1).widget()
+                        next_item_widget = self._labels.itemAt(drop_idx).widget()
+                        if prev_item_widget and next_item_widget: # Check if widgets exist
+                            marker_x = (prev_item_widget.geometry().right() + next_item_widget.geometry().left()) // 2
+                        else: # Fallback if widgets are missing
+                            marker_x = self.contentsRect().left() + 2
+
+
+                    self._drop_indicator.setGeometry(marker_x - self._drop_indicator.width() // 2, 
+                                                     marker_y,
+                                                     self._drop_indicator.width(), 
+                                                     target_height)
+                    self._drop_indicator.show()
+                    self._drop_indicator.raise_()
+                
+                else: # Labels area but no labels currently
+                    content_rect_top = self.contentsRect().top()
+                    label_area_height = self.pw.geometry().top() - content_rect_top
+                    
+                    self._drop_indicator.setGeometry(self.contentsRect().left() + 2,
+                                                     content_rect_top,
+                                                     self._drop_indicator.width(),
+                                                     max(10, label_area_height if label_area_height > 0 else 20))
+                    self._drop_indicator.show()
+                    self._drop_indicator.raise_()
+            else: # Over the plot area or otherwise not in a valid label drop zone
+                self._drop_indicator.hide()
+            
+            e.acceptProposedAction()
+        else:
+            self._drop_indicator.hide()
+            e.ignore()
+
+    def dragLeaveEvent(self, e):
+        self._drop_indicator.hide()
+        super().dragLeaveEvent(e)
+
     def dropEvent(self, e):
+        self._drop_indicator.hide() # Hide indicator on drop
         if e.mimeData().hasFormat("application/x-customplotitem"):
             plot_name = e.mimeData().text()
             source_data_bytes = e.mimeData().data("application/x-customplotitem-source")
@@ -155,6 +246,15 @@ class SubPlotWidget(QWidget):
                     print(f"Fallback Error: Could not find source widget by name: {source_widget_name_from_mime}")
                     e.ignore()
                     return
+
+            # Determine insertion index based on drop location
+            idx_for_insertion: int
+            if e.pos().y() < self.pw.geometry().top(): # pw is the pyqtgraph.PlotWidget
+                # Drop is likely in the upper region where labels are
+                idx_for_insertion = self._get_drop_index(e.pos())
+            else:
+                # Drop is likely in the lower region (the plot graph itself)
+                idx_for_insertion = len(self._traces) # Append
             
             if actual_source_widget == self: # Reordering within the same widget
                 dragged_item_widget = None
@@ -171,8 +271,8 @@ class SubPlotWidget(QWidget):
                     e.ignore()
                     return
 
-                # Determine the new index based on drop position
-                new_idx = self._get_drop_index(e.pos())
+                # Use the determined index for reordering
+                new_idx = idx_for_insertion
 
                 # Remove from _traces. Note: dragged_item_widget is the object, not pg_trace
                 # Popping _traces first.
@@ -245,7 +345,8 @@ class SubPlotWidget(QWidget):
                 # source_object here *is* CustomPlotItem.source.
                 
                 # Moving from a different widget - implement precise positional insertion.
-                new_idx = self._get_drop_index(e.pos())
+                # Use the determined index for move-in
+                new_idx = idx_for_insertion
 
                 # a. Get Data (source_object is the CustomPlotItem.source from the dragged item)
                 #    plot_name is the name of the trace.
