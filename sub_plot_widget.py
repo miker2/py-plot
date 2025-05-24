@@ -229,18 +229,12 @@ class SubPlotWidget(QWidget):
     def dropEvent(self, e):
         self._drop_indicator.hide() # Hide indicator on drop
         if e.mimeData().hasFormat("application/x-customplotitem"):
-            plot_name = e.mimeData().text()
-            source_data_bytes = e.mimeData().data("application/x-customplotitem-source")
+            plot_name = e.mimeData().text() # Still useful for getting the trace name
+            # source_data_bytes for "application/x-customplotitem-source" is no longer sent or used.
             source_widget_name_bytes = e.mimeData().data("application/x-customplotitem-sourcewidget")
-
-            try:
-                source_object = pickle.loads(source_data_bytes)
-            except Exception as err:
-                print(f"Error unpickling source_object: {err}")
-                e.ignore()
-                return
-
             source_widget_name_from_mime = source_widget_name_bytes.data().decode()
+            # The 'source_object' (original data source like VarListWidget) will be retrieved differently
+            # for move-in operations, directly from the dragged CustomPlotItem.
 
             actual_source_widget = None
             if e.source() and isinstance(e.source(), CustomPlotItem):
@@ -369,17 +363,37 @@ class SubPlotWidget(QWidget):
                 # Use the determined index for move-in
                 new_idx = idx_for_insertion
 
-                # a. Get Data (source_object is the CustomPlotItem.source from the dragged item)
+                # --- MODIFIED SECTION START for source_object retrieval ---
+                if not isinstance(e.source(), CustomPlotItem): # e.source() should be the CustomPlotItem
+                    print("Error: Drag source is not a CustomPlotItem during move operation.")
+                    e.ignore()
+                    return
+                
+                dragged_label_widget = e.source() 
+                source_object_for_plotting = dragged_label_widget.source # Get .source from the CustomPlotItem
+
+                if source_object_for_plotting is None:
+                    print("Error: Dragged CustomPlotItem has no 'source' attribute or it's None.")
+                    e.ignore()
+                    return
+                
+                # Use source_object_for_plotting for the rest of this block.
+                # For clarity and to match subsequent variable names, let's assign it:
+                source_object = source_object_for_plotting
+                # --- MODIFIED SECTION END ---
+
+
+                # a. Get Data (source_object is now correctly from dragged_label_widget.source)
                 #    plot_name is the name of the trace.
                 if not hasattr(source_object, 'model') or not callable(source_object.model) or \
                    not hasattr(source_object, 'time'):
-                    print(f"Error: source_object for '{plot_name}' lacks model() or time attribute.")
+                    print(f"Error: source_object for '{plot_name}' lacks model() or time attribute. Type: {type(source_object)}")
                     e.ignore()
                     return
 
                 y_data = source_object.model().get_data_by_name(plot_name)
                 if y_data is None:
-                    print(f"Error: Could not retrieve y_data for '{plot_name}' from source_object.")
+                    print(f"Error: Could not retrieve y_data for '{plot_name}' from source_object. Type: {type(source_object)}")
                     e.ignore()
                     return
                 x_data = source_object.time

@@ -180,21 +180,20 @@ class CustomPlotItem(QLabel):
         mime_data = QMimeData()
 
         mime_data.setText(self.trace.name())
-        # Ensure self.source is picklable. If not, this will raise an error.
-        try:
-            source_byte_array = QByteArray(pickle.dumps(self.source))
-            mime_data.setData("application/x-customplotitem-source", source_byte_array)
-        except Exception as e:
-            print(f"Error pickling source data: {e}")
-            # Optionally, handle the error e.g. by not setting this part of the mime data
-            # or by setting a specific error marker. For now, we'll let it proceed without
-            # this data if pickling fails, and the drop target will have to handle it.
-            pass
 
-        # Ensure _subplot_widget has objectName set.
-        # If objectName can be None or empty, provide a default or handle this case.
-        object_name = self._subplot_widget.objectName() if self._subplot_widget and self._subplot_widget.objectName() else ""
-        mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray(object_name.encode()))
+        # Set source SubPlotWidget name (objectName of the parent SubPlotWidget)
+        if self._subplot_widget and self._subplot_widget.objectName(): # Check if objectName is set
+            mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray(self._subplot_widget.objectName().encode()))
+        else:
+            # Fallback or error if objectName is crucial and not set
+            print("Warning: _subplot_widget or its objectName not set in CustomPlotItem for sourcewidget MIME data.") 
+            mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray()) # Empty
+
+        # Set the primary marker for this custom drag type
+        mime_data.setData("application/x-customplotitem", QByteArray())
+
+        # DO NOT pickle self.source for "application/x-customplotitem-source"
+        # The try-except block for pickling self.source and setting "application/x-customplotitem-source" is removed.
 
         drag.setMimeData(mime_data)
 
@@ -204,9 +203,10 @@ class CustomPlotItem(QLabel):
         drag.setHotSpot(event.pos() - self.rect().topLeft())
 
         # Execute the drag operation
-        # The exec_ call is blocking. It returns the drop action performed by the target.
-        # We're not using the return value here, but it's available if needed.
-        drag.exec_(Qt.MoveAction)
+        try:
+            drag.exec_(Qt.MoveAction)
+        except Exception as e_drag:
+            print(f"Error during drag operation execution: {e_drag}")
 
         # Reset the drag start position after the drag operation is complete
         self._drag_start_position = None
