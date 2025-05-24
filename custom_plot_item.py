@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from PyQt5.QtCore import Qt, pyqtSlot, QRect
+from PyQt5.QtCore import Qt, pyqtSlot, QRect, QMimeData, QByteArray
 from PyQt5.QtWidgets import QLabel, QMenu, QAction
-from PyQt5.QtGui import QPalette, QPixmap, QPainter
+from PyQt5.QtGui import QPalette, QPixmap, QPainter, QDrag
 
 try:
     from PyQt5.QtGui import QApplication
@@ -10,6 +10,7 @@ except ImportError:
     from PyQt5.QtWidgets import QApplication
 
 import os
+import pickle # Add pickle
 import pyqtgraph as pg
 import numpy as np
 
@@ -30,6 +31,8 @@ class CustomPlotItem(QLabel):
         '''
 
         self.trace = plot_data_item
+        self._subplot_widget = parent # Store parent reference
+        self._drag_start_position = None # Initialize drag start position
 
         self.source = source
 
@@ -162,8 +165,51 @@ class CustomPlotItem(QLabel):
         if event.button() == Qt.LeftButton and self._close_btn_rect.contains(event.pos()):
             self.remove_item()
             event.accept()
+        elif event.button() == Qt.LeftButton:
+            self._drag_start_position = event.pos()
         else:
             super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if not (event.buttons() & Qt.LeftButton) or not self._drag_start_position:
+            return
+        if (event.pos() - self._drag_start_position).manhattanLength() < QApplication.startDragDistance():
+            return
+
+        drag = QDrag(self)
+        mime_data = QMimeData()
+
+        mime_data.setText(self.trace.name())
+        # Ensure self.source is picklable. If not, this will raise an error.
+        try:
+            source_byte_array = QByteArray(pickle.dumps(self.source))
+            mime_data.setData("application/x-customplotitem-source", source_byte_array)
+        except Exception as e:
+            print(f"Error pickling source data: {e}")
+            # Optionally, handle the error e.g. by not setting this part of the mime data
+            # or by setting a specific error marker. For now, we'll let it proceed without
+            # this data if pickling fails, and the drop target will have to handle it.
+            pass
+
+        # Ensure _subplot_widget has objectName set.
+        # If objectName can be None or empty, provide a default or handle this case.
+        object_name = self._subplot_widget.objectName() if self._subplot_widget and self._subplot_widget.objectName() else ""
+        mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray(object_name.encode()))
+
+        drag.setMimeData(mime_data)
+
+        pixmap = QPixmap(self.size())
+        self.render(pixmap)
+        drag.setPixmap(pixmap)
+        drag.setHotSpot(event.pos() - self.rect().topLeft())
+
+        # Execute the drag operation
+        # The exec_ call is blocking. It returns the drop action performed by the target.
+        # We're not using the return value here, but it's available if needed.
+        drag.exec_(Qt.MoveAction)
+
+        # Reset the drag start position after the drag operation is complete
+        self._drag_start_position = None
 
     def remove_item(self):
         self.parent().remove_item(self.trace, self)

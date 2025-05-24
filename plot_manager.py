@@ -221,6 +221,7 @@ class PlotManager(QWidget):
 class PlotAreaWidget(QWidget):
     def __init__(self, plot_manager):
         QWidget.__init__(self)
+        self._next_subplot_idx = 0 # Add subplot index counter
 
         self._plot_manager = plot_manager
 
@@ -238,7 +239,12 @@ class PlotAreaWidget(QWidget):
         # Default to the bottom of the list
         if idx is None:
             idx = self.plot_area.count()
-        subplot = SubPlotWidget(self)
+
+        # Generate unique object name for the SubPlotWidget
+        subplot_object_name = f"subplot_tab{self._plot_manager.tabs.currentIndex()}_area{self._next_subplot_idx}"
+        self._next_subplot_idx += 1
+        
+        subplot = SubPlotWidget(self, object_name_override=subplot_object_name) # Pass unique name
         subplot.move_cursor(self._plot_manager._time)
         subplot.set_xlimits(self._plot_manager.range_slider.min(), self._plot_manager.range_slider.max())
         self._plot_manager.timeValueChanged.connect(subplot.move_cursor)

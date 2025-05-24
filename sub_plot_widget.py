@@ -16,8 +16,18 @@ class SubPlotWidget(QWidget):
     # with a slight modification to the "yellow" so it's darker and easier to see.
     COLORS = ('#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#a65628', '#D4C200', '#f781bf')
 
-    def __init__(self, parent):
+    # Class variable for ensuring unique IDs if no override is provided, though it's better if PlotAreaWidget provides one.
+    _subplot_local_id_counter = 0
+
+    def __init__(self, parent, object_name_override=None):
         QWidget.__init__(self, parent=parent)
+
+        if object_name_override:
+            self.setObjectName(object_name_override)
+        else:
+            # Fallback to ensure unique object name if not provided
+            SubPlotWidget._subplot_local_id_counter += 1
+            self.setObjectName(f"SubPlotWidget_fallback_{SubPlotWidget._subplot_local_id_counter}")
 
         v_box = QVBoxLayout(self)
 
@@ -99,19 +109,201 @@ class SubPlotWidget(QWidget):
         return menu
 
     def dragEnterEvent(self, e):
-        if e.mimeData().hasFormat("application/x-DataItem"):
-            e.accept()
+        if e.mimeData().hasFormat("application/x-customplotitem") or \
+           e.mimeData().hasFormat("application/x-DataItem"): # Keep existing functionality
+            e.acceptProposedAction() # Use acceptProposedAction for move/copy distinction
         else:
             e.ignore()
 
     def dropEvent(self, e):
-        data = e.mimeData()
-        bstream = data.retrieveData("application/x-DataItem", QVariant.ByteArray)
-        selected = pickle.loads(bstream)
+        if e.mimeData().hasFormat("application/x-customplotitem"):
+            plot_name = e.mimeData().text()
+            source_data_bytes = e.mimeData().data("application/x-customplotitem-source")
+            source_widget_name_bytes = e.mimeData().data("application/x-customplotitem-sourcewidget")
 
-        self.plot_data_from_source(selected.var_name, e.source())
+            try:
+                source_object = pickle.loads(source_data_bytes)
+            except Exception as err:
+                print(f"Error unpickling source_object: {err}")
+                e.ignore()
+                return
 
-        e.accept()
+            source_widget_name_from_mime = source_widget_name_bytes.data().decode()
+
+            actual_source_widget = None
+            if e.source() and isinstance(e.source(), CustomPlotItem):
+                actual_source_widget = e.source()._subplot_widget
+                if actual_source_widget is None:
+                    print("Error: Dragged CustomPlotItem's _subplot_widget is None.")
+                    e.ignore()
+                    return
+                # Sanity check if objectName from mime matches the direct reference
+                if actual_source_widget.objectName() != source_widget_name_from_mime:
+                    print(f"Warning: Mismatch between e.source()._subplot_widget.objectName() ('{actual_source_widget.objectName()}') and MIME source widget name ('{source_widget_name_from_mime}'). Prioritizing e.source()._subplot_widget.")
+
+            else: # Fallback to lookup by name if e.source() is not CustomPlotItem (should not happen)
+                print("Warning: e.source() is not a CustomPlotItem. Falling back to objectName lookup for source widget.")
+                if source_widget_name_from_mime == self.objectName():
+                    actual_source_widget = self
+                elif hasattr(self.parent(), 'plot_area'): # Assumes PlotAreaWidget is parent
+                    for i in range(self.parent().plot_area.count()):
+                        widget = self.parent().plot_area.itemAt(i).widget()
+                        if isinstance(widget, SubPlotWidget) and widget.objectName() == source_widget_name_from_mime:
+                            actual_source_widget = widget
+                            break
+                if actual_source_widget is None:
+                    print(f"Fallback Error: Could not find source widget by name: {source_widget_name_from_mime}")
+                    e.ignore()
+                    return
+            
+            if actual_source_widget == self: # Reordering within the same widget
+                dragged_item_widget = None
+                original_idx = -1
+                for i, trace_item in enumerate(self._traces):
+                    # Using trace.name() as CustomPlotItem.name also calls this.
+                    if trace_item.trace.name() == plot_name: 
+                        dragged_item_widget = trace_item
+                        original_idx = i
+                        break
+                
+                if dragged_item_widget is None:
+                    print(f"Error: Could not find dragged item '{plot_name}' in self for reordering.")
+                    e.ignore()
+                    return
+
+                # Determine the new index based on drop position
+                new_idx = self._get_drop_index(e.pos())
+
+                # Remove from _traces. Note: dragged_item_widget is the object, not pg_trace
+                # Popping _traces first.
+                self._traces.pop(original_idx)
+                
+                # Adjust new_idx if original_idx was before it, due to the pop operation
+                if new_idx > original_idx:
+                    new_idx -= 1
+                # FlowLayout does not have insertWidget. Need to rebuild.
+                
+                # Store all label widgets, remove the dragged one from list
+                all_labels = []
+                dragged_label_for_reinsert = None
+                for i in range(self._labels.count()):
+                    lbl_widget = self._labels.itemAt(i).widget()
+                    if lbl_widget == dragged_item_widget: # CustomPlotItem is a QLabel
+                         dragged_label_for_reinsert = self._labels.takeAt(i).widget() # Take it
+                         break # Found and took the one we need to re-insert
+                
+                # If not found by object equality, try by name (less robust)
+                if dragged_label_for_reinsert is None:
+                    for i in range(self._labels.count()):
+                        lbl_widget = self._labels.itemAt(i).widget()
+                        if lbl_widget.name == plot_name : # CustomPlotItem.name
+                            dragged_label_for_reinsert = self._labels.takeAt(i).widget()
+                            break
+                
+                if dragged_label_for_reinsert is None:
+                    print(f"Error: Could not find label widget for '{plot_name}' to reorder.")
+                    # We already modified self._traces, this state is inconsistent.
+                    # This path should ideally not be reached if dragged_item_widget was found.
+                    # For safety, try to restore _traces or ignore.
+                    e.ignore()
+                    return
+
+                # Clear remaining items from _labels and store them
+                remaining_labels = []
+                while self._labels.count() > 0:
+                    remaining_labels.append(self._labels.takeAt(0).widget())
+                
+                # Reconstruct the list of labels in the new order
+                # new_idx here is relative to the list *after* removing the item.
+                # If new_idx was for appending, it should be len(remaining_labels)
+                # For now, let's use the placeholder new_idx for _traces logic,
+                # and for labels, we insert at the same conceptual index.
+                # This new_idx is for self._traces, which now has one less item.
+                # So, if new_idx was len(self._traces) (before pop), it's now len(self._traces)-1 (after pop)
+                # Example: [a,b,c,d], pop b (idx 1). traces = [a,c,d]. new_idx=3 (append).
+                # labels: [L_a, L_c, L_d]. Insert L_b at new_idx=3. -> [L_a, L_c, L_d, L_b]
+
+                final_label_order = remaining_labels
+                final_label_order.insert(new_idx, dragged_label_for_reinsert)
+
+                # Re-populate _labels
+                for lbl_widget in final_label_order:
+                    self._labels.addWidget(lbl_widget)
+
+                # Insert into _traces at new_idx
+                self._traces.insert(new_idx, dragged_item_widget)
+
+                # Update colors
+                for i, item_widget in enumerate(self._traces):
+                    item_widget.update_color(self._get_color(i))
+                
+                e.acceptProposedAction()
+
+            else: # Moving from a different widget
+                # Add to current (target) widget. plot_data_from_source needs the name and the source object.
+                # The 'source' argument in plot_data_from_source is the original data source (e.g. data file widget)
+                # not the CustomPlotItem's source attribute directly.
+                # source_object here *is* CustomPlotItem.source.
+                self.plot_data_from_source(plot_name, source_object) 
+
+                # Remove from source widget
+                source_item_widget_to_remove = None
+                pg_trace_to_remove = None
+                for i, trace_item in enumerate(actual_source_widget._traces):
+                    if trace_item.trace.name() == plot_name:
+                        source_item_widget_to_remove = trace_item
+                        pg_trace_to_remove = trace_item.trace 
+                        break # Found the item to remove
+
+                if source_item_widget_to_remove and pg_trace_to_remove:
+                    actual_source_widget.remove_item(pg_trace_to_remove, source_item_widget_to_remove)
+                else:
+                    print(f"Error: Could not find item '{plot_name}' in source widget '{actual_source_widget.objectName()}' to remove after move.")
+                    # Item already added to target, so proceed, but log error.
+
+                e.acceptProposedAction()
+
+        elif e.mimeData().hasFormat("application/x-DataItem"): # Existing functionality
+            data = e.mimeData()
+            bstream = data.retrieveData("application/x-DataItem", QVariant.ByteArray)
+            selected = pickle.loads(bstream) # This is a DataItem
+
+            # e.source() for "application/x-DataItem" is the VarListWidget
+            # The 'source' argument for plot_data_from_source should be this VarListWidget
+            self.plot_data_from_source(selected.var_name, e.source())
+            e.accept()
+        else:
+            e.ignore()
+
+    def _get_drop_index(self, drop_pos_in_widget_coords):
+        """
+        Determines the insertion index for a dropped CustomPlotItem within the
+        _labels FlowLayout based on the drop position.
+        drop_pos_in_widget_coords is relative to the SubPlotWidget.
+        """
+        if self._labels.count() == 0:
+            return 0
+
+        for i in range(self._labels.count()):
+            widget = self._labels.itemAt(i).widget()
+            if widget is None: # Should not happen with current setup
+                continue
+
+            geom = widget.geometry() # Relative to SubPlotWidget's content area
+
+            # Scenario 1: Drop is on a line above this widget
+            if drop_pos_in_widget_coords.y() < geom.top():
+                return i
+
+            # Scenario 2: Drop is on the same line as this widget (or a line below but needs checking if it's to the left)
+            # Check if Y is within this widget's vertical span (or above its bottom edge)
+            if drop_pos_in_widget_coords.y() < geom.bottom():
+                # If Y is within this widget's height range AND X is to its left (or in its left half)
+                if drop_pos_in_widget_coords.x() < geom.left() + geom.width() / 2:
+                    return i
+        
+        # If drop position is below or to the right of all items on their respective lines
+        return self._labels.count()
 
     def _on_scene_mouse_click_event(self, event):
         if event.button() != Qt.LeftButton:
