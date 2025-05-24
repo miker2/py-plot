@@ -112,7 +112,7 @@ class ShortcutsHelpDialog(QDialog):
             QLabel {
                 color: #333;
             }
-            QLabel[font*="bold"] { /* Targets labels with bold in their font string, like titles */
+            QLabel[isTitle="true"] { /* Dark blue for titles */
                 color: #0050a0; /* Dark blue for titles */
             }
         """)
