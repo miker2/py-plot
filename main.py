@@ -29,6 +29,7 @@ import commentjson as json
 from imports import install_and_import
 from maths_widget import DockedMathsWidget
 from preferences_dialog import PreferencesDialog
+from shortcuts_help_dialog import ShortcutsHelpDialog
 from text_log_widget import DockedTextLogWidget
 
 shtab = install_and_import("shtab")
@@ -109,6 +110,7 @@ class PyPlot(QMainWindow):
         self.setup_file_menu()
         self.setup_plot_menu()
         self.setup_tool_menu()
+        self.setup_help_menu()
 
         self.statusBar()
 
@@ -202,6 +204,19 @@ class PyPlot(QMainWindow):
         self.show_text_logs_action.setCheckable(True)
         self.show_text_logs_action.triggered.connect(self.create_or_destroy_text_log_widget)
         tool_menu.addAction(self.show_text_logs_action)
+
+    def setup_help_menu(self):
+        main_menu = self.menuBar()
+        help_menu = main_menu.addMenu('&Help')
+
+        keyboard_shortcuts_action = QAction("Keyboard &Shortcuts...", self)
+        keyboard_shortcuts_action.setStatusTip("Show keyboard shortcuts")
+        keyboard_shortcuts_action.triggered.connect(self.show_shortcuts_dialog)
+        help_menu.addAction(keyboard_shortcuts_action)
+
+    def show_shortcuts_dialog(self):
+        dialog = ShortcutsHelpDialog(self)
+        dialog.exec_()
 
     def create_visualizer_window(self, is_checked):
         if is_checked:
