@@ -1,7 +1,7 @@
 from PyQt5.QtCore import QSettings
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
                             QLabel, QPushButton, QGroupBox, QFormLayout,
-                            QLineEdit, QFileDialog)
+                            QLineEdit, QFileDialog, QComboBox, QSpinBox) # Added QComboBox, QSpinBox
 import os
 
 class PreferencesDialog(QDialog):
@@ -43,6 +43,28 @@ class PreferencesDialog(QDialog):
         viz_group.setLayout(viz_layout)
         layout.addWidget(viz_group)
 
+        # Create Phase Plot Settings group
+        phase_plot_group = QGroupBox("Phase Plot Settings")
+        phase_plot_layout = QFormLayout()
+
+        # Default Marker Type
+        self.default_marker_type_combo = QComboBox()
+        self.default_marker_type_combo.addItems(["Circle", "Square", "Crosshairs"]) # pyqtgraph symbols: 'o', 's', '+'
+        current_marker_type = self.settings.value("phase_plot/default_marker_type", "Circle")
+        self.default_marker_type_combo.setCurrentText(current_marker_type)
+        phase_plot_layout.addRow("Default Marker Type:", self.default_marker_type_combo)
+
+        # Default Marker Size
+        self.default_marker_size_spinbox = QSpinBox()
+        self.default_marker_size_spinbox.setMinimum(1)
+        self.default_marker_size_spinbox.setMaximum(50)
+        current_marker_size = int(self.settings.value("phase_plot/default_marker_size", 10))
+        self.default_marker_size_spinbox.setValue(current_marker_size)
+        phase_plot_layout.addRow("Default Marker Size:", self.default_marker_size_spinbox)
+        
+        phase_plot_group.setLayout(phase_plot_layout)
+        layout.addWidget(phase_plot_group)
+
         # Add buttons
         button_layout = QHBoxLayout()
         self.ok_button = QPushButton("OK")
@@ -80,4 +102,9 @@ class PreferencesDialog(QDialog):
         """Save the current settings to QSettings"""
         self.settings.setValue("urdf_path", self.urdf_path.text())
         self.settings.setValue("geometry_json", self.geometry_json.text())
+
+        # Save Phase Plot settings
+        self.settings.setValue("phase_plot/default_marker_type", self.default_marker_type_combo.currentText())
+        self.settings.setValue("phase_plot/default_marker_size", self.default_marker_size_spinbox.value())
+        
         self.settings.sync()
