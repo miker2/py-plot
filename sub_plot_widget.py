@@ -137,6 +137,8 @@ class SubPlotWidget(QWidget):
 
     def dragMoveEvent(self, e):
         if e.mimeData().hasFormat("application/x-customplotitem"):
+            # This is the existing logic for showing/positioning the drop indicator
+            # when dragging a custom plot item (a label).
             if e.pos().y() < self.pw.geometry().top(): # Cursor is in the label area
                 target_height = 20 # Default/fallback height
                 marker_y = 0
@@ -204,11 +206,19 @@ class SubPlotWidget(QWidget):
                                                      max(10, label_area_height if label_area_height > 0 else 20))
                     self._drop_indicator.show()
                     self._drop_indicator.raise_()
-            else: # Over the plot area or otherwise not in a valid label drop zone
+            else: # Over plot area or otherwise not in a valid label drop zone for customplotitem
                 self._drop_indicator.hide()
             
-            e.acceptProposedAction()
+            e.acceptProposedAction() # Accept for custom plot item
+
+        elif e.mimeData().hasFormat("application/x-DataItem"):
+            # For items from VarListWidget, we don't show the drop indicator,
+            # but we MUST accept the event to allow dropEvent to be called.
+            self._drop_indicator.hide() # Ensure indicator is hidden
+            e.acceptProposedAction() # Crucially accept the event
+        
         else:
+            # Unknown type, hide indicator and ignore.
             self._drop_indicator.hide()
             e.ignore()
 
