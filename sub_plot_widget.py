@@ -439,15 +439,33 @@ class SubPlotWidget(QWidget):
 
                 e.acceptProposedAction()
 
-        elif e.mimeData().hasFormat("application/x-DataItem"): # Existing functionality
+        elif e.mimeData().hasFormat("application/x-DataItem"):
+            print("DEBUG: DropEvent for application/x-DataItem") # New debug print
             data = e.mimeData()
             bstream = data.retrieveData("application/x-DataItem", QVariant.ByteArray)
-            selected = pickle.loads(bstream) # This is a DataItem
+            try:
+                selected = pickle.loads(bstream)
+                print(f"DEBUG: Unpickled 'selected': {selected}, var_name: {getattr(selected, 'var_name', 'N/A')}") # New debug print
+            except Exception as ex:
+                print(f"ERROR: Error unpickling DataItem: {ex}") # Changed to ERROR
+                e.ignore()
+                return
 
-            # e.source() for "application/x-DataItem" is the VarListWidget
-            # The 'source' argument for plot_data_from_source should be this VarListWidget
-            self.plot_data_from_source(selected.var_name, e.source())
-            e.accept()
+            print(f"DEBUG: e.source() type: {type(e.source())}") # New debug print
+            if not hasattr(e.source(), 'model'):
+                print("ERROR: e.source() does not have a model() method.") # New debug print
+                e.ignore()
+                return
+
+            # Call plot_data_from_source
+            try:
+                print(f"DEBUG: Calling plot_data_from_source with var_name='{selected.var_name}' and source='{e.source()}'") # New
+                self.plot_data_from_source(selected.var_name, e.source())
+                print("DEBUG: Returned from plot_data_from_source successfully") # New
+                e.accept() 
+            except Exception as ex_plot:
+                print(f"ERROR: Exception during plot_data_from_source or accept: {ex_plot}") # New
+                e.ignore() # Ensure event is ignored on error
         else:
             e.ignore()
 
@@ -491,11 +509,19 @@ class SubPlotWidget(QWidget):
         event.accept()
 
     def plot_data_from_source(self, name, source):
+        print(f"DEBUG: plot_data_from_source called with name='{name}', source type: {type(source)}") # New
+
+        if not hasattr(source, 'model') or not callable(getattr(source, 'model')):
+            print(f"ERROR: plot_data_from_source: 'source' ({type(source).__name__}) has no callable model attribute.") # New
+            return # Abort if source is not as expected
+
+        # ...
         y_data = source.model().get_data_by_name(name)
-
+        print(f"DEBUG: y_data is None: {y_data is None}") # New
         if y_data is None:
-            return
-
+            print(f"ERROR: y_data for '{name}' is None. Aborting plot.") # New
+            return 
+        
         item = self.pw.getPlotItem().plot(x=source.time,
                                           y=y_data,
                                           pen=pg.mkPen(color=self._get_color(self.cidx),
@@ -508,15 +534,31 @@ class SubPlotWidget(QWidget):
         label = CustomPlotItem(self, item, source, self.parent().plot_manager()._tick)
         self._traces.append(label)
         self._labels.addWidget(label)
+        
+        # Connect signals for the new label
+        # Time changed connection is fine
         self.parent().plot_manager().timeValueChanged.connect(label.on_time_changed)
 
-        source.onClose.connect(lambda: self.remove_item(item, label))
-        self.cidx += 1
+        # Conditionally connect onClose for the source
+        if hasattr(source, 'onClose') and callable(getattr(source, 'onClose', None)):
+            # The source here is e.source() from dropEvent when adding new from VarListWidget,
+            # or CustomPlotItem.source (pickled/unpickled) when moving an existing plot.
+            # For VarListWidget, this connects to VarListWidget.onClose.
+            # For moved items, this connects to the original source's onClose (e.g., the original VarListWidget).
+            disconnect_slot = lambda item_to_remove=item, lbl_to_remove=label: self.remove_item(item_to_remove, lbl_to_remove)
+            source.onClose.connect(disconnect_slot)
+            # Store the slot for potential disconnection if needed (though less common for onClose)
+            label.setProperty("onClose_slot_plot_data_from_source", disconnect_slot)
+        else:
+            print(f"Note: Source object {type(source).__name__} does not have an onClose signal. Signal removal might not be tied to source closure for this item: {name}")
+        
+        # self.cidx += 1 # cidx will be updated based on len(_traces)
         # self.update_plot_yrange() will be called by _update_all_trace_colors if needed, 
         # or can be called separately. For now, let _update_all_trace_colors handle colors.
         # The original plot_data_from_source call to self.update_plot_yrange() is kept.
         self.update_plot_yrange() 
         self._update_all_trace_colors() # Ensure all colors are correct after adding a new trace
+        self.cidx = len(self._traces) # Update cidx based on the actual number of traces
 
     def remove_item(self, trace, label):
         self.pw.removeItem(trace)
