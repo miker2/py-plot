@@ -234,8 +234,7 @@ class SubPlotWidget(QWidget):
                 self._traces.insert(new_idx, dragged_item_widget)
 
                 # Update colors
-                for i, item_widget in enumerate(self._traces):
-                    item_widget.update_color(self._get_color(i))
+                self._update_all_trace_colors()
                 
                 e.acceptProposedAction()
 
@@ -244,9 +243,85 @@ class SubPlotWidget(QWidget):
                 # The 'source' argument in plot_data_from_source is the original data source (e.g. data file widget)
                 # not the CustomPlotItem's source attribute directly.
                 # source_object here *is* CustomPlotItem.source.
-                self.plot_data_from_source(plot_name, source_object) 
+                
+                # Moving from a different widget - implement precise positional insertion.
+                new_idx = self._get_drop_index(e.pos())
 
-                # Remove from source widget
+                # a. Get Data (source_object is the CustomPlotItem.source from the dragged item)
+                #    plot_name is the name of the trace.
+                if not hasattr(source_object, 'model') or not callable(source_object.model) or \
+                   not hasattr(source_object, 'time'):
+                    print(f"Error: source_object for '{plot_name}' lacks model() or time attribute.")
+                    e.ignore()
+                    return
+
+                y_data = source_object.model().get_data_by_name(plot_name)
+                if y_data is None:
+                    print(f"Error: Could not retrieve y_data for '{plot_name}' from source_object.")
+                    e.ignore()
+                    return
+                x_data = source_object.time
+
+                # b. Create pyqtgraph.PlotDataItem
+                # Use a temporary color; _update_all_trace_colors will finalize it.
+                # Using new_idx for temp color, or len if it's an append.
+                temp_color_idx = new_idx if new_idx < len(self._traces) else len(self._traces)
+                temp_color = self._get_color(temp_color_idx) 
+                
+                plot_data_item = self.pw.getPlotItem().plot(x=x_data,
+                                                            y=y_data,
+                                                            pen=pg.mkPen(color=temp_color,
+                                                                         width=CustomPlotItem.PEN_WIDTH),
+                                                            name=plot_name,
+                                                            autoDownsample=True,
+                                                            downsampleMethod='peak')
+
+                # c. Create CustomPlotItem (the label)
+                # Assuming self.parent() is PlotAreaWidget, and it has plot_manager() method
+                # CustomPlotItem expects a tick value (int or float that can be mapped to a tick)
+                # self.parent().plot_manager()._tick is an int, _time is float.
+                # CustomPlotItem's constructor uses the passed value directly as self._tick
+                # For consistency, let's use current _tick from plot_manager.
+                current_tick = self.parent().plot_manager()._tick
+                label = CustomPlotItem(self, plot_data_item, source_object, current_tick)
+
+                # d. Insert into _traces
+                self._traces.insert(new_idx, label)
+                self.cidx += 1 # Increment count of items
+
+                # e. Insert Label into _labels (FlowLayout) - Re-populate
+                # Clear existing labels from layout
+                while self._labels.count() > 0:
+                    old_label_layout_item = self._labels.takeAt(0)
+                    if old_label_layout_item and old_label_layout_item.widget():
+                        # Don't destroy, just remove from layout. They are in self._traces.
+                        old_label_layout_item.widget().hide() # Hide temporarily
+
+                # Re-add all labels from self._traces in the new order
+                for trace_item_widget in self._traces:
+                    self._labels.addWidget(trace_item_widget)
+                    trace_item_widget.show() # Ensure it's visible if it was hidden
+
+                # f. Connect Signals for the New Label
+                self.parent().plot_manager().timeValueChanged.connect(label.on_time_changed)
+                
+                # The original plot_data_from_source used: source.onClose.connect(...)
+                # Here, 'source_object' is the CustomPlotItem.source from the *dragged* item.
+                # This source_object (e.g., DataFileWidget instance) should have onClose.
+                if hasattr(source_object, 'onClose') and callable(getattr(source_object, 'onClose', None)):
+                    # Ensure we use the correct plot_data_item and label for removal
+                    disconnect_slot = lambda item_to_remove=plot_data_item, lbl_to_remove=label: self.remove_item(item_to_remove, lbl_to_remove)
+                    source_object.onClose.connect(disconnect_slot)
+                    # Store the slot for potential disconnection if needed, though typically not for onClose.
+                    label.setProperty("onClose_slot", disconnect_slot) 
+                else:
+                    print(f"Warning: source_object for {plot_name} does not have a callable onClose signal/attribute.")
+
+                # g. Update Plot Y-Range and Colors
+                self.update_plot_yrange() 
+                self._update_all_trace_colors() # Finalize colors based on new order
+
+                # Remove from source widget (this part remains the same)
                 source_item_widget_to_remove = None
                 pg_trace_to_remove = None
                 for i, trace_item in enumerate(actual_source_widget._traces):
@@ -336,8 +411,11 @@ class SubPlotWidget(QWidget):
 
         source.onClose.connect(lambda: self.remove_item(item, label))
         self.cidx += 1
-
-        self.update_plot_yrange()
+        # self.update_plot_yrange() will be called by _update_all_trace_colors if needed, 
+        # or can be called separately. For now, let _update_all_trace_colors handle colors.
+        # The original plot_data_from_source call to self.update_plot_yrange() is kept.
+        self.update_plot_yrange() 
+        self._update_all_trace_colors() # Ensure all colors are correct after adding a new trace
 
     def remove_item(self, trace, label):
         self.pw.removeItem(trace)
@@ -345,9 +423,7 @@ class SubPlotWidget(QWidget):
         label.close()
 
         self.cidx = max(0, self.cidx - 1)
-
-        for idx in range(self._labels.count()):
-            self._labels.itemAt(idx).widget().update_color(self._get_color(idx))
+        self._update_all_trace_colors()
 
     def clear_plot(self):
         # HAX!!! Save the cursor!
@@ -389,6 +465,23 @@ class SubPlotWidget(QWidget):
     @staticmethod
     def _get_color(idx):
         return SubPlotWidget.COLORS[idx % len(SubPlotWidget.COLORS)]
+
+    def _update_all_trace_colors(self):
+        """
+        Updates the pen color of all traces and the text color of their corresponding
+        labels based on their current order in self._traces.
+        """
+        for i, trace_widget in enumerate(self._traces):
+            # trace_widget is a CustomPlotItem instance
+            if isinstance(trace_widget, CustomPlotItem): # Defensive check
+                trace_widget.update_color(self._get_color(i))
+            else:
+                # This case should ideally not happen if _traces is managed correctly.
+                print(f"Warning: Item at index {i} in self._traces is not a CustomPlotItem.")
+        
+        # If y-range needs to be updated after color/pen style changes that might affect visibility
+        # self.update_plot_yrange() # Consider if this is needed here or if it's handled sufficiently elsewhere.
+                                  # For now, let's keep it focused on colors.
 
     def _copy_to_clipboard(self):
         cb = QApplication.clipboard()
