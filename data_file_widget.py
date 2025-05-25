@@ -43,6 +43,9 @@ class DataFileWidget(QWidget):
         self.tabs.currentChanged.connect(lambda x: self.tabChanged.emit())
         layout.addWidget(self.tabs)
 
+        # Make var_lists easily accessible for get_data_item_by_file_id_and_name
+        self.var_lists = [] # List to store VarListWidget instances
+
         self.filter_box = FilterBoxWidget(self.tabs)
         layout.addWidget(self.filter_box)
 
@@ -68,8 +71,12 @@ class DataFileWidget(QWidget):
         tab_name = os.path.basename(filepath)
         # Create a new tab and add the varListWidget to it.
         self.latest_data_file_name = filepath
-        self.tabs.addTab(var_list, tab_name)
-        self.sources[filepath] = self.tabs.widget(self.tabs.count() - 1)
+        tab_idx = self.tabs.addTab(var_list, tab_name) # addTab returns the index
+        # self.sources[filepath] = self.tabs.widget(self.tabs.count() - 1) # Old way
+        self.sources[filepath] = var_list # Store the instance directly
+        var_list.idx = tab_idx # Assign tab index as an ad-hoc idx if needed for PlotSpec compatibility
+        self.var_lists.append(var_list) # Add to our list
+
         self.tabs.setCurrentWidget(var_list)
         self._update_range_slider()
 
@@ -81,11 +88,22 @@ class DataFileWidget(QWidget):
 
     def close_file(self, index):
         # Add function for closing the tab here.
-        filename = self.tabs.widget(index).filename
-        self.tabs.widget(index).close()
-        self.tabs.removeTab(index)
+        widget_to_close = self.tabs.widget(index)
+        filename = widget_to_close.filename
+        
+        if widget_to_close in self.var_lists:
+            self.var_lists.remove(widget_to_close)
+        if filename in self.sources:
+            del self.sources[filename]
+            
+        widget_to_close.close() # Close the widget first
+        self.tabs.removeTab(index) # Then remove tab
+
         if self.tabs.count() > 0:
             self._update_range_slider()
+        else: # Reset slider if no files are open
+            self.controller.plot_manager.update_slider_limits(0, 1.e9)
+
 
         self.countChanged.emit()
         self.fileClosed[str].emit(filename)
@@ -99,8 +117,44 @@ class DataFileWidget(QWidget):
     def get_data_file(self, idx):
         return self.tabs.widget(idx)
 
-    def get_data_file_by_name(self, name):
-        return self.sources[name]
+    def get_data_file_by_name(self, name): # name is filepath
+        return self.sources.get(name) # Use .get for safer access
+
+    def get_data_item_by_file_id_and_name(self, file_identifier: str, signal_name: str) -> 'DataItem | None':
+        """
+        Retrieves a DataItem from one of the loaded files.
+        file_identifier can be the file's full path or its stringified tab index at time of PlotSpec creation.
+        signal_name is the original_name of the signal.
+        """
+        # Try matching by full filepath first (most robust)
+        var_list_widget = self.sources.get(file_identifier)
+        if var_list_widget:
+            model = var_list_widget.model()
+            if model:
+                data_item = model.get_data_by_name(signal_name)
+                if data_item:
+                    return data_item
+        
+        # Fallback: iterate through all var_lists if not found by path (e.g., if file_identifier was an index string)
+        # This is less robust if tab order changed or files were closed/reopened.
+        for vlw in self.var_lists:
+            # Check against filename (if file_identifier was a filename but not full path)
+            if os.path.basename(vlw.filename) == file_identifier:
+                 model = vlw.model()
+                 if model:
+                    data_item = model.get_data_by_name(signal_name)
+                    if data_item: return data_item
+            
+            # Check against ad-hoc idx (tab index at time of creation)
+            # This relies on VarListWidget having an 'idx' attribute that was set to its tab index.
+            if hasattr(vlw, 'idx') and str(vlw.idx) == file_identifier:
+                model = vlw.model()
+                if model:
+                    data_item = model.get_data_by_name(signal_name)
+                    if data_item: return data_item
+        
+        print(f"Warning: Could not find DataItem for signal '{signal_name}' from file ID '{file_identifier}'")
+        return None
 
     def get_sources(self):
         return self.sources
@@ -108,7 +162,13 @@ class DataFileWidget(QWidget):
     def get_time(self, idx=0):
         if self.tabs.count() == 0:
             return None
+        # Ensure idx is valid before trying to access widget
+        if idx < 0 or idx >= self.tabs.count():
+            if self.tabs.count() > 0: # Default to the current tab if idx is bad but tabs exist
+                return self.tabs.currentWidget().time
+            return None # No tabs, no time
         return self.get_data_file(idx).time
+
 
     @pyqtSlot(QPoint)
     def on_context_menu_request(self, pos):

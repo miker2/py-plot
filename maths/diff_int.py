@@ -19,6 +19,13 @@ class DifferentiateSpec(MathSpecBase):
     def default_var_name(self, vname):
         return f"Diff({vname})"
 
+    def get_operation_details(self):
+        # Differentiation is straightforward, parameters could be added if different methods are implemented
+        return {'method': 'finite_difference', 'order': 1}
+
+    def get_source_type(self):
+        return "math_diff"
+
 
 class IntegrateSpec(MathSpecBase):
     def __init__(self, parent):
@@ -35,3 +42,10 @@ class IntegrateSpec(MathSpecBase):
 
     def default_var_name(self, vname):
         return f"Int({vname})"
+
+    def get_operation_details(self):
+        # Integration is also straightforward for this implementation
+        return {'method': 'cumulative_sum'}
+
+    def get_source_type(self):
+        return "math_integrate"

@@ -83,3 +83,16 @@ class FilterSpec(MathSpecBase):
 
     def default_var_name(self, vname):
         return f"Filter({vname},{self._params.order},{self._params.type},{self._params.cutoff})"
+
+    def get_operation_details(self):
+        if hasattr(self, '_params') and self._params:
+            return {
+                'order': self._params.order,
+                'type': self._params.type,
+                'cutoff': self._params.cutoff,
+                'filtfilt': self._params.filtfilt
+            }
+        return None # Or raise an error if params are expected to always be there
+
+    def get_source_type(self):
+        return "math_filter"

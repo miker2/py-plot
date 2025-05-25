@@ -4,15 +4,18 @@ from PyQt5.QtCore import QAbstractListModel, QModelIndex, QVariant, Qt
 
 import numpy as np
 
+from plot_spec import PlotSpec # Added import
+
 
 class DataItem(object):
     """
         Data structure for storing data items in the list widget
     """
 
-    def __init__(self, var_name, data):
+    def __init__(self, var_name, data, plot_spec: PlotSpec | None = None): # Added plot_spec
         self._var_name = var_name
         self._data = data
+        self._plot_spec = plot_spec # Added plot_spec
         self._time = None
 
     @property
@@ -26,6 +29,14 @@ class DataItem(object):
     @property
     def time(self):
         return self._time
+
+    @property
+    def plot_spec(self): # Added plot_spec property
+        return self._plot_spec
+
+    @plot_spec.setter
+    def plot_spec(self, value: PlotSpec | None): # Added plot_spec setter
+        self._plot_spec = value
 
     def __repr__(self):
         return self._var_name
@@ -99,10 +110,29 @@ class DataModel(QAbstractListModel):
     def has_key(self, name):
         return name in self._raw_data.index
 
-    def get_data_by_name(self, name):
-        data = None
-        try:
-            data = self._raw_data[name]
-        except KeyError:
-            print(f"Unknown key: {name}")
-        return data
+    def get_data_by_name(self, name) -> DataItem | None:
+        # Iterates self._data (which is list[DataItem]) and finds the DataItem with the matching var_name.
+        for item in self._data:
+            if item.var_name == name:
+                # Ensure the PlotSpec is created if it's missing for a file-loaded item
+                if item.plot_spec is None:
+                    # Attempt to get a file_source_identifier
+                    # This DataModel instance itself doesn't store the filename directly in a way
+                    # that's easily accessible per item here. We'll assume a generic one or improve later if needed.
+                    # For now, we know it's from this model, which is usually file-based.
+                    file_id = "unknown_data_model_source"
+                    # A better approach would be if data_loader.source (filename) was stored in DataModel
+                    # and accessible here, or if DataItem was initialized with it.
+                    # Let's assume self.filename could exist if DataModel was enhanced.
+                    # if hasattr(self, 'filename') and self.filename:
+                    #     file_id = self.filename
+                    
+                    item.plot_spec = PlotSpec(
+                        name=item.var_name,
+                        source_type="file",
+                        original_name=item.var_name,
+                        file_source_identifier=file_id # Placeholder, actual file ID needs better handling
+                    )
+                return item
+        print(f"Unknown key: {name} in DataModel")
+        return None

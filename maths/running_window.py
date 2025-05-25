@@ -110,3 +110,15 @@ class RunningWindowSpec(MathSpecBase):
 
     def default_var_name(self, vname):
         return f"RunningWindow({vname},{self._params.type.name.lower()},{self._params.window_sz},{int(self._params.is_ticks)})"
+
+    def get_operation_details(self):
+        if hasattr(self, '_params') and self._params:
+            return {
+                'type': self._params.type.name.lower(), # e.g. "mean", "median"
+                'window_sz': self._params.window_sz,
+                'is_ticks': self._params.is_ticks
+            }
+        return None
+
+    def get_source_type(self):
+        return "math_running_window"

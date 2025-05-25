@@ -6,6 +6,13 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QInputDialog, QLin
 
 from QRangeSlider import QRangeSlider
 from sub_plot_widget import SubPlotWidget
+from plot_spec import PlotSpec
+from data_model import DataItem # Added import
+
+from typing import TYPE_CHECKING, Dict, Any # Added imports
+if TYPE_CHECKING:
+    from maths_widget import MathsWidget
+    from data_file_widget import DataFileWidget
 
 import math
 import graph_utils
@@ -299,6 +306,113 @@ class PlotAreaWidget(QWidget):
     def _get_plot(self, idx):
         return self.plot_area.itemAt(idx).widget()
 
+    def _reproduce_signal(self, plot_spec_dict: Dict[str, Any], 
+                          data_file_widget_ref: 'DataFileWidget', 
+                          maths_widget_ref: 'MathsWidget', 
+                          loaded_signals_cache: Dict[str, DataItem]) -> DataItem | None:
+        """
+        Recursively reproduces a signal based on its PlotSpec dictionary.
+        Uses a cache to avoid reprocessing the same signal.
+        """
+        if not plot_spec_dict:
+            print("Error: Received empty plot_spec_dict.")
+            return None
+
+        try:
+            plot_spec = PlotSpec.from_dict(plot_spec_dict)
+        except Exception as e:
+            print(f"Error converting dict to PlotSpec: {e}. Dict: {plot_spec_dict}")
+            return None
+
+        if plot_spec.unique_id in loaded_signals_cache:
+            return loaded_signals_cache[plot_spec.unique_id]
+
+        data_item: DataItem | None = None
+
+        if plot_spec.source_type == "file":
+            if plot_spec.file_source_identifier and plot_spec.original_name:
+                # Assume DataFileWidget has a method to get a DataItem by some identifier and original name
+                # This method would need to find the correct VarListWidget/DataModel and get the DataItem
+                # For now, this is a conceptual call.
+                # data_item = data_file_widget_ref.get_data_item_by_file_id_and_name(
+                #     plot_spec.file_source_identifier, 
+                #     plot_spec.original_name
+                # )
+                
+                # Placeholder for DataFileWidget interaction:
+                # We need a way to map file_source_identifier to a specific DataModel/VarListWidget
+                # and then retrieve the DataItem.
+                # Let's assume data_file_widget_ref can provide access to its models/var_lists
+                found_model = None
+                if hasattr(data_file_widget_ref, 'var_lists'): # Assuming var_lists is a list of VarListWidget
+                    for vl in data_file_widget_ref.var_lists:
+                        # This matching logic for file_source_identifier needs to be robust.
+                        # It could be a filename, an index, or a unique ID assigned to the source.
+                        current_model_identifier = vl.filename if hasattr(vl, 'filename') else str(vl.idx)
+                        if current_model_identifier == plot_spec.file_source_identifier:
+                            found_model = vl.model() # DataModel
+                            break
+                
+                if found_model:
+                    data_item = found_model.get_data_by_name(plot_spec.original_name) # This returns DataItem
+                    if data_item and data_item.plot_spec is None:
+                        # If the original DataItem didn't have a PlotSpec (e.g. from older save),
+                        # assign the one we just loaded/recreated.
+                        data_item.plot_spec = plot_spec
+                    elif data_item and data_item.plot_spec and data_item.plot_spec.unique_id != plot_spec.unique_id:
+                        # This might happen if the file was reloaded and IDs changed.
+                        # The loaded plot_spec should be preferred for consistency of the loaded plot.
+                        print(f"Info: Replacing PlotSpec on DataItem {data_item.var_name} with loaded PlotSpec.")
+                        data_item.plot_spec = plot_spec
+
+                if data_item is None:
+                    print(f"Error: Could not find 'file' signal '{plot_spec.original_name}' from source '{plot_spec.file_source_identifier}'.")
+
+            else:
+                print(f"Error: 'file' source_type missing file_source_identifier or original_name for PlotSpec: {plot_spec.name}")
+        
+        elif plot_spec.source_type.startswith("math_"):
+            input_data_items: list[DataItem] = []
+            valid_inputs = True
+            for input_spec_dict in plot_spec_dict.get('input_plot_specs', []): # Use dict for recursion
+                input_data_item = self._reproduce_signal(
+                    input_spec_dict, 
+                    data_file_widget_ref, 
+                    maths_widget_ref, 
+                    loaded_signals_cache
+                )
+                if input_data_item:
+                    input_data_items.append(input_data_item)
+                else:
+                    print(f"Error: Could not reproduce input signal for {plot_spec.name}. Input spec dict: {input_spec_dict}")
+                    valid_inputs = False
+                    break # Stop if any input fails
+            
+            if valid_inputs:
+                # Pass the PlotSpec object, not the dict
+                data_item = maths_widget_ref.execute_operation_from_spec(plot_spec, input_data_items)
+                if data_item and data_item.plot_spec is None:
+                    # Ensure the reproduced DataItem has its plot_spec set (execute_operation_from_spec should ideally do this)
+                    print(f"Warning: PlotSpec was not set by execute_operation_from_spec for {data_item.var_name}. Setting it now.")
+                    data_item.plot_spec = plot_spec
+                elif data_item and data_item.plot_spec and data_item.plot_spec.unique_id != plot_spec.unique_id:
+                    # If execute_operation_from_spec set a different PlotSpec (e.g. a new one with a new ID),
+                    # prefer the one that guided the reproduction to maintain consistency with the saved plot.
+                    print(f"Info: Overwriting PlotSpec on DataItem {data_item.var_name} from math operation with the loaded PlotSpec for consistency.")
+                    data_item.plot_spec = plot_spec
+
+            else:
+                print(f"Error: Failed to reproduce one or more input signals for math operation: {plot_spec.name}")
+
+        else:
+            print(f"Error: Unknown or unsupported source_type: {plot_spec.source_type} for PlotSpec: {plot_spec.name}")
+
+
+        if data_item:
+            loaded_signals_cache[plot_spec.unique_id] = data_item
+        
+        return data_item
+
     def get_plot_info(self):
         n_plots = self.plot_area.count()
         plotlist = dict()
@@ -323,19 +437,66 @@ class PlotAreaWidget(QWidget):
                 self.remove_subplot(self._get_plot(self.plot_area.count() - 1))
 
         # Walk the list of traces and produce the plots.
-        for i in range(requested_count):
-            plot = plot_info["plots"][i]
+        loaded_signals_cache: Dict[str, DataItem] = {}
+        # Assuming controller and its widgets are accessible. Adjust paths if necessary.
+        # These refs might be better passed in or accessed via a more stable interface.
+        maths_widget_ref = self.plot_manager()._controller.maths_widget if hasattr(self.plot_manager()._controller, 'maths_widget') else None
+        data_file_widget_ref = self.plot_manager()._controller.data_file_widget if hasattr(self.plot_manager()._controller, 'data_file_widget') else None
 
+        if not maths_widget_ref or not data_file_widget_ref:
+            print("Error: MathsWidget or DataFileWidget reference not found. Cannot reproduce signals.")
+            return
+
+        for i in range(requested_count):
+            plot_dict = plot_info["plots"][i] # Renamed 'plot' to 'plot_dict' to avoid confusion
             subplot = self._get_plot(i)
 
             if clear_existing:
                 subplot.clear_plot()
 
-            for trace in plot["traces"]:
-                subplot.plot_data_from_source(trace, data_source)
+            for trace_spec_dict in plot_dict["traces"]: # trace_spec_dict is a PlotSpec dictionary
+                # The 'data_source' argument in the original plot_data_from_source was a single
+                # VarListWidget. This is not suitable for reproduced signals which can come from
+                # various files or be math-generated.
+                # We now use _reproduce_signal to get the DataItem.
+                
+                data_item_to_plot = self._reproduce_signal(
+                    trace_spec_dict, # This is the plot_spec_dict for the trace
+                    data_file_widget_ref,
+                    maths_widget_ref,
+                    loaded_signals_cache
+                )
+
+                if data_item_to_plot:
+                    # The SubPlotWidget.plot_data_from_source method will need to be adapted
+                    # to accept a DataItem directly, or a new method like plot_reproduced_data_item
+                    # needs to be created. For now, we assume plot_data_from_source can handle this.
+                    # The 'source' argument here is tricky. For file items, it was the VarListWidget.
+                    # For math items, it was MathsWidget.
+                    # We pass a reference that CustomPlotItem might use (e.g. for onClose).
+                    # This will be refined when SubPlotWidget is modified.
+                    
+                    # Tentative call, assuming plot_data_from_source is modified:
+                    # The first argument to plot_data_from_source was 'name'. Now we pass DataItem.
+                    # The second argument was 'source'.
+                    # Let's assume a modification to plot_data_from_source like:
+                    # plot_data_from_source(self, name_or_data_item, source_for_connections_if_any=None, is_reproduced_item=False)
+                    
+                    # Determine a 'source' for connection purposes (e.g. onClose).
+                    # If it's a file item, its original VarListWidget source is complex to get here.
+                    # If it's a math item, MathsWidget is the source.
+                    # For now, pass maths_widget_ref as a general source for potential connections.
+                    # This part (source_for_connections) needs careful handling in SubPlotWidget.
+                    subplot.plot_data_from_source(
+                        name_or_data_item=data_item_to_plot, 
+                        source_or_none=maths_widget_ref, # Placeholder for source context
+                        is_reproduced_item=True # New flag
+                    ) 
+                else:
+                    print(f"Warning: Could not reproduce signal for spec: {trace_spec_dict.get('name', 'Unknown name')}")
 
             # Handle the case where the "yrange" key is missing.
-            if clear_existing and "yrange" in plot.keys():
+            if clear_existing and "yrange" in plot_dict.keys(): # Use plot_dict
                 # Don't mess up the y-range if plots are being appended.
                 subplot.set_y_range(*plot["yrange"])
 
