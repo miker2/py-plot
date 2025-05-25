@@ -1,7 +1,9 @@
 import importlib
+import os
+import subprocess
+import sys
 
 def _install_via_conda(module: str):
-    import subprocess
     try:
         subprocess.check_call(["conda", "install", "-y", "-c", "conda-forge", module])
         return True
@@ -10,7 +12,6 @@ def _install_via_conda(module: str):
         return False
 
 def _install_via_pip(module: str):
-    import subprocess
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", module])
         return True
@@ -23,8 +24,6 @@ def install_and_import(module: str):
         i_mod = importlib.import_module(module)
 
     except ModuleNotFoundError:
-        import os
-        import sys
         is_conda = os.path.exists(os.path.join(sys.base_prefix, 'conda-meta'))
         print(f"Installing {module}. Please wait...")
 
