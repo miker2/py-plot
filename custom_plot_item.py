@@ -14,12 +14,19 @@ import pyqtgraph as pg
 import numpy as np
 
 import graph_utils
+from plot_spec import PlotSpec
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from var_list_widget import VarListWidget
+    from maths_widget import MathsWidget
+    # PlotSpec is already imported above, no need to re-import under TYPE_CHECKING unless it was causing issues
 
 
 class CustomPlotItem(QLabel):
     PEN_WIDTH = 2
 
-    def __init__(self, parent, plot_data_item, source, current_tick):
+    def __init__(self, parent, plot_data_item, source, current_tick, plot_spec_from_source: 'PlotSpec | None' = None): # Added plot_spec_from_source
         QLabel.__init__(self, plot_data_item.name(), parent=parent)
 
         ''' This item should handle the following things:
@@ -63,6 +70,31 @@ class CustomPlotItem(QLabel):
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_menu)
+
+        # Initialize self.plot_spec based on plot_spec_from_source
+        if plot_spec_from_source:
+            self.plot_spec = plot_spec_from_source
+        else:
+            # Create a default "file" PlotSpec if none is provided
+            name = plot_data_item.name() # Use the name from the plot_data_item
+            file_id = "unknown_source_widget" # Default file identifier
+            
+            # Attempt to get a more specific file_id from the source
+            # source is typically VarListWidget or MathsWidget (or their models)
+            if hasattr(source, 'filename') and source.filename: # Check for direct filename (e.g. VarListWidget)
+                file_id = source.filename
+            elif hasattr(source, 'idx') and source.idx is not None: # Check for direct idx (e.g. VarListWidget)
+                file_id = str(source.idx)
+            # If source is MathsWidget, it's more complex as it doesn't have a single 'filename' or 'idx'
+            # However, if plot_spec_from_source is None, it implies the data isn't from a known math operation.
+            # This logic assumes that if data comes from MathsWidget, plot_spec_from_source should be set.
+
+            self.plot_spec = PlotSpec(
+                name=name,
+                source_type="file", # Default to "file" if not otherwise specified
+                original_name=name, # Assume original_name is same as current name if not specified
+                file_source_identifier=file_id
+            )
 
     def update_color(self, color_str):
         pen = pg.mkPen(color=color_str, width=CustomPlotItem.PEN_WIDTH)
@@ -121,7 +153,8 @@ class CustomPlotItem(QLabel):
     def get_plot_spec(self):
         # For now, we'll just get the name of the trace, but this will become more complex in the
         # future when we start supporting derived signals.
-        return self.trace.name()
+        # This method should now return the full PlotSpec object.
+        return self.plot_spec
 
     @pyqtSlot(float)
     def on_time_changed(self, time):

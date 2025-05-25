@@ -122,29 +122,92 @@ class SubPlotWidget(QWidget):
         self.parent().plot_manager().set_tick_from_time(t_click)
         event.accept()
 
-    def plot_data_from_source(self, name, source):
-        y_data = source.model().get_data_by_name(name)
+    def plot_data_from_source(self, name_or_data_item, source_or_none, is_reproduced_item=False):
+        data_item: DataItem | None = None
+        name_to_plot: str = ""
+        y_data: np.ndarray | None = None
+        time_data: np.ndarray | None = None
+        plot_spec_for_custom_item: PlotSpec | None = None
+        source_for_custom_item = source_or_none # This will be the source for CustomPlotItem
 
-        if y_data is None:
+        if is_reproduced_item:
+            if not isinstance(name_or_data_item, DataItem):
+                print("Error: Expected DataItem when is_reproduced_item is True.")
+                return
+            data_item = name_or_data_item
+            # Ensure plot_spec exists on the reproduced item, critical for CustomPlotItem
+            if not data_item.plot_spec:
+                print(f"Error: Reproduced DataItem '{data_item.var_name}' is missing its PlotSpec.")
+                return # Cannot proceed without a PlotSpec for the CustomPlotItem
+            
+            plot_spec_for_custom_item = data_item.plot_spec
+            name_to_plot = plot_spec_for_custom_item.name # Use name from PlotSpec for consistency
+            y_data = data_item.data
+            time_data = data_item.time
+            # source_for_custom_item is already set to source_or_none (e.g. maths_widget_ref)
+        else:
+            if not isinstance(name_or_data_item, str):
+                print("Error: Expected signal name string when is_reproduced_item is False.")
+                return
+            if source_or_none is None:
+                print("Error: Source widget cannot be None when is_reproduced_item is False.")
+                return
+
+            name_to_plot = name_or_data_item
+            current_source_widget = source_or_none
+            
+            data_item = current_source_widget.model().get_data_by_name(name_to_plot)
+
+            if data_item is None:
+                print(f"Error: Could not retrieve DataItem for '{name_to_plot}' from source.")
+                return
+            
+            plot_spec_for_custom_item = data_item.plot_spec # This should exist due to prior subtasks
+            y_data = data_item.data
+            time_data = data_item.time if data_item.time is not None else current_source_widget.time
+            # source_for_custom_item is already set (it's current_source_widget)
+
+        if y_data is None: # Should be caught by data_item is None earlier, but as a safeguard
+            print(f"Error: No y_data available for '{name_to_plot}'.")
+            return
+        if not isinstance(y_data, np.ndarray):
+            print(f"Warning: Data for '{name_to_plot}' is not a numpy array. Attempting conversion.")
+            try:
+                y_data = np.array(y_data)
+            except Exception as e:
+                print(f"Error converting data for '{name_to_plot}' to numpy array: {e}")
+                return
+        
+        if time_data is None:
+            print(f"Error: No time_data available for '{name_to_plot}'. Cannot plot.")
             return
 
-        item = self.pw.getPlotItem().plot(x=source.time,
-                                          y=y_data,
-                                          pen=pg.mkPen(color=self._get_color(self.cidx),
-                                                       width=CustomPlotItem.PEN_WIDTH),
-                                          name=name,
-                                          # clipToView=True,
-                                          autoDownsample=True,
-                                          downsampleMethod='peak')
+        # Actual plotting
+        pg_plot_item = self.pw.getPlotItem().plot(x=time_data,
+                                                  y=y_data,
+                                                  pen=pg.mkPen(color=self._get_color(self.cidx),
+                                                               width=CustomPlotItem.PEN_WIDTH),
+                                                  name=name_to_plot,
+                                                  autoDownsample=True,
+                                                  downsampleMethod='peak')
 
-        label = CustomPlotItem(self, item, source, self.parent().plot_manager()._tick)
+        label = CustomPlotItem(self, pg_plot_item, source_for_custom_item, 
+                               self.parent().plot_manager()._tick, 
+                               plot_spec_from_source=plot_spec_for_custom_item)
         self._traces.append(label)
         self._labels.addWidget(label)
         self.parent().plot_manager().timeValueChanged.connect(label.on_time_changed)
 
-        source.onClose.connect(lambda: self.remove_item(item, label))
-        self.cidx += 1
+        if hasattr(source_for_custom_item, 'onClose') and source_for_custom_item.onClose is not None:
+            try:
+                source_for_custom_item.onClose.connect(lambda: self.remove_item(pg_plot_item, label))
+            except Exception as e: # Broad exception to catch issues with signal connection
+                print(f"Warning: Could not connect onClose for source of '{name_to_plot}'. Error: {e}")
+        elif not is_reproduced_item: # Only warn if not reproduced, as reproduced might not have traditional source
+             print(f"Warning: Source for '{name_to_plot}' does not have 'onClose' signal or it's None.")
 
+
+        self.cidx += 1
         self.update_plot_yrange()
 
     def remove_item(self, trace, label):
@@ -190,7 +253,8 @@ class SubPlotWidget(QWidget):
         # isn't documented in the public API.
         y_range = self.pw.getPlotItem().getAxis('left').range
         plot_info['yrange'] = y_range
-        plot_info['traces'] = [trace.get_plot_spec() for trace in self._traces if trace.isVisible()]
+        # Ensure PlotSpec objects are serialized to dictionaries
+        plot_info['traces'] = [trace.get_plot_spec().to_dict() for trace in self._traces if trace.isVisible()]
 
         return plot_info
 

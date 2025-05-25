@@ -7,6 +7,7 @@ from PyQt5.QtGui import QMouseEvent, QKeyEvent
 import abc
 
 from data_model import DataItem
+from plot_spec import PlotSpec # Added import
 from var_list_widget import VarListWidget
 
 
@@ -77,9 +78,38 @@ class MathSpecBase(QObject):
                 vname, accept = QInputDialog.getText(self.parent(), "Enter variable name", "Variable name:",
                                                      text=self.default_var_name(selected.var_name))
                 if accept:
-                    data_item = DataItem(vname, val)
-                    data_item._time = selected._time
-                    self.parent().add_new_var(data_item, vlist)
+                    # PlotSpec creation for math operations
+                    input_plot_spec = selected.plot_spec
+                    if not input_plot_spec:
+                        print(f"Warning: Input variable {selected.var_name} for {self.name} operation is missing PlotSpec. Creating a fallback.")
+                        fallback_file_id = "unknown_input_source"
+                        # vlist is the VarListWidget, vlist.model() is the DataModel
+                        source_model = vlist.model() 
+                        if hasattr(source_model, 'filename') and source_model.filename: # Check if source_model has filename
+                            fallback_file_id = source_model.filename
+                        elif hasattr(source_model, 'idx') and source_model.idx is not None: # Check if source_model has idx
+                            fallback_file_id = str(source_model.idx)
+                        
+                        input_plot_spec = PlotSpec(
+                            name=selected.var_name,
+                            source_type="file_fallback",
+                            original_name=selected.var_name,
+                            file_source_identifier=fallback_file_id
+                        )
+
+                    operation_details = self.get_operation_details()
+                    source_type = self.get_source_type()
+
+                    output_plot_spec = PlotSpec(
+                        name=vname,
+                        source_type=source_type,
+                        input_plot_specs=[input_plot_spec],
+                        operation_details=operation_details
+                    )
+
+                    data_item = DataItem(vname, val, plot_spec=output_plot_spec)
+                    data_item._time = selected._time # selected is a DataItem, its _time should be set
+                    self.parent().add_new_var(data_item, vlist, output_plot_spec) # Pass output_plot_spec
                 else:
                     print("User cancelled operation!")
             else:
