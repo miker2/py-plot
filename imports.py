@@ -13,7 +13,7 @@ def _install_via_conda(module: str):
 
 def _install_via_pip(module: str):
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", module])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", module])
         return True
     except subprocess.CalledProcessError:
         print(f"  Failed to install {module} via pip.")
