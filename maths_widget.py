@@ -21,6 +21,7 @@ from maths.running_minmax import RunningMinMaxSpec
 
 from data_model import DataItem
 from docked_widget import DockedWidget
+from logging_config import get_logger
 
 try:
     from py_expression_eval import Parser
@@ -30,6 +31,8 @@ except ModuleNotFoundError:
 
     subprocess.check_call([sys.executable, "-m", "pip", "install", "py_expression_eval"])
     from py_expression_eval import Parser
+
+logger = get_logger(__name__)
 
 
 class DockedMathsWidget(DockedWidget):
@@ -207,15 +210,15 @@ class MathsWidget(QWidget):
         has_all_vars = vars_from_list == set(e_vars)
 
         if not has_all_vars:
-            print("Expression uses unknown variables: " +
-                  f"{set(e_vars).difference(vars_from_list)}")
+            logger.warning("Expression uses unknown variables: " +
+                          f"{set(e_vars).difference(vars_from_list)}")
             return
 
         # Ensure that all variables in the expression are also from the same file:
         f_idx = [self._vars[v].source.idx for v in e_vars]
         if len(set(f_idx)) > 1:
-            print("All variables in the expression must be from the same file.")
-            print(f"Variables are from the following files: {set(f_idx)}.")
+            logger.warning("All variables in the expression must be from the same file.")
+            logger.warning(f"Variables are from the following files: {set(f_idx)}.")
             return
 
         try:
@@ -223,7 +226,7 @@ class MathsWidget(QWidget):
             e_data = {v: self._vars[v].data for v in e_vars}
             val = expr.evaluate(e_data)
         except Exception as ex:
-            print(f"Some sort of error! -- {ex}")
+            logger.error(f"Some sort of error! -- {ex}")
             return
 
         vname = self.math_entry.text()
@@ -292,5 +295,5 @@ class MathsWidget(QWidget):
             vid = v_lookup[name]
             data = self._vars[vid].data
         except KeyError:
-            print(f"Unknown key: {name}")
+            logger.warning(f"Unknown key: {name}")
         return data

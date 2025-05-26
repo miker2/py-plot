@@ -10,6 +10,7 @@ import pyqtgraph_patch  # Import the patch
 from data_file_widget import DataFileWidget
 from plot_manager import PlotManager
 from visualizer_3d_widget import DockedVisualizer3DWidget
+from logging_config import setup_logging, get_logger
 
 _visualizer_available = True
 # try:
@@ -39,6 +40,9 @@ pg.setConfigOptions(antialias=True)
 _PLOTLIST_EXT = "plotlist"
 
 __APP_NAME__ = "PyPlot"
+
+# Set up logging
+logger = get_logger(__name__)
 
 
 def __find_dir(start, dirname):
@@ -190,7 +194,7 @@ class PyPlot(QMainWindow):
             self.visualizer_3d_action.triggered.connect(self.create_visualizer_window)
             tool_menu.addAction(self.visualizer_3d_action)
         else:
-            print("3D visualizer not available.")
+            logger.warning("3D visualizer not available.")
 
         self.maths_widget_action = QAction("Show maths widget", self)
         self.maths_widget_action.setStatusTip('Show the math widget')
@@ -258,7 +262,7 @@ class PyPlot(QMainWindow):
             # Create (or unhide) the widget
             if not self.text_log_widget:
                 source = self.data_file_widget.get_active_data_file()
-                print(f"Source: {source}")
+                logger.debug(f"Source: {source}")
                 self.text_log_widget = DockedTextLogWidget(self, source)
                 self.addDockWidget(Qt.RightDockWidgetArea, self.text_log_widget)
 
@@ -304,10 +308,10 @@ class PyPlot(QMainWindow):
         self.move(self._settings.value("position", QPoint(200, 200)))
         window_state = int(self._settings.value("window_state", Qt.WindowNoState))
         if window_state & Qt.WindowMaximized:
-            print("Setting window to maximized.")
+            logger.info("Setting window to maximized.")
             self.showMaximized()
         elif window_state & Qt.WindowFullScreen:
-            print("Setting window to full-screen.")
+            logger.info("Setting window to full-screen.")
             self.showFullScreen()
         show_3d_viz = bool(int(self._settings.value("show_3d_viz", 0)))
         if show_3d_viz:
@@ -403,6 +407,7 @@ class PyPlot(QMainWindow):
         if ext.lower() != os.path.extsep + _PLOTLIST_EXT:
             fname += os.path.extsep + _PLOTLIST_EXT
         with open(fname, 'w') as fp:
+            logger.debug(plotlist)
             print(plotlist, file=fp)
 
         self._set_last_dir("last_plotlist_dir", os.path.dirname(fname))
@@ -440,7 +445,7 @@ class PyPlot(QMainWindow):
                 self.plot_manager.generate_plots_for_active_tab(plotlist, self.data_file_widget.get_data_file(idx), idx > 0)
 
     def load_from_cli(self, cli_args):
-        print(f"Loading {cli_args.logfile}")
+        logger.info(f"Loading {cli_args.logfile}")
         self.open_file(cli_args.logfile)
 
         if cli_args.plotlist is None:
@@ -461,11 +466,11 @@ class PyPlot(QMainWindow):
 
                         _, ext = os.path.splitext(pl)
                         if ext.lower() != f".{_PLOTLIST_EXT}":
-                            print(f"!!! {pl} does not appear to be a valid plotlist.")
+                            logger.warning(f"{pl} does not appear to be a valid plotlist.")
                             continue
                         cli_args.plotlist.append(open(os.path.join(plotlist_dir, pl), af.mode))
             except Exception as e:
-                print(f"Exception when loading {af.name}: {repr(e)}")
+                logger.error(f"Exception when loading {af.name}: {repr(e)}")
 
         # Plot manager creates a tab by default, so we'll only add a new tab if there is more than 1 plotlist
         count = 0
@@ -475,14 +480,14 @@ class PyPlot(QMainWindow):
 
             data_source = self.data_file_widget.get_active_data_file()
             if data_source is None:
-                print("Error: No open file! You must open a file before loading a plotlist.")
+                logger.error("No open file! You must open a file before loading a plotlist.")
             try:
                 plotlist = json.load(pl)
                 self.plot_manager.generate_plots_for_active_tab(plotlist, data_source, append=False)
                 count += 1
             except Exception as e:
-                print(f"{pl.name} does not appear to be a valid plotlist!")
-                print(f"Exception: {repr(e)}")
+                logger.error(f"{pl.name} does not appear to be a valid plotlist!")
+                logger.error(f"Exception: {repr(e)}")
 
 
 class TimeTickWidget(QLabel):
@@ -532,6 +537,9 @@ def get_main_parser():
 
 
 if __name__ == "__main__":
+    # Set up logging before creating the application
+    setup_logging()
+    
     MainEventThread = QApplication(sys.argv)
     resource_dir, _ = os.path.split(os.path.realpath(__file__))
     MainEventThread.setWindowIcon(QIcon(resource_dir + "/logo.png"))
@@ -544,7 +552,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.logfile is None and (args.plotlist is not None or args.analysis is not None):
-        print("If a plotlist (or set of plotlists) is specified from the command-line, a file must "
+        logger.error("If a plotlist (or set of plotlists) is specified from the command-line, a file must "
               + "also be specified (via '-f').")
     if args.logfile is not None:
         args.func(args)

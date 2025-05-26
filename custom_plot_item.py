@@ -3,6 +3,7 @@
 from PyQt5.QtCore import Qt, pyqtSlot, QRect, QMimeData, QByteArray
 from PyQt5.QtWidgets import QLabel, QMenu, QAction
 from PyQt5.QtGui import QPalette, QPixmap, QPainter, QDrag
+from logging_config import get_logger
 
 try:
     from PyQt5.QtGui import QApplication
@@ -16,6 +17,7 @@ import numpy as np
 
 import graph_utils
 
+logger = get_logger(__name__)
 
 class CustomPlotItem(QLabel):
     PEN_WIDTH = 2
@@ -174,66 +176,50 @@ class CustomPlotItem(QLabel):
         if not (event.buttons() & Qt.LeftButton) or not self._drag_start_position:
             return
         if (event.pos() - self._drag_start_position).manhattanLength() < QApplication.startDragDistance():
-            print("DEBUG_MME: mouseMoveEvent exit - drag distance not enough")
             return
 
-        print("DEBUG_MME: Creating QDrag and QMimeData")
         drag = QDrag(self)
         mime_data = QMimeData()
 
-        print("DEBUG_MME: Setting text (plot name)")
         try:
             mime_data.setText(self.trace.name())
-            print("DEBUG_MME: setText OK")
         except Exception as e_setText:
-            print(f"ERROR_MME: Exception during setText: {e_setText}")
+            logger.error(f"MOUSE_MOVE_EVENT: Exception during setText: {e_setText}")
             # This is where the pickling error might be if self.trace.name() is complex
             # and indirectly tries to pickle self.source. Unlikely but possible.
 
-        print("DEBUG_MME: Setting sourcewidget MIME data")
         try:
             if self._subplot_widget and self._subplot_widget.objectName():
                 mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray(self._subplot_widget.objectName().encode()))
-                print("DEBUG_MME: sourcewidget MIME data SET")
             else:
-                print("WARNING_MME: _subplot_widget or its objectName not set.")
+                logger.warning("MOUSE_MOVE_EVENT: _subplot_widget or its objectName not set.")
                 mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray())
         except Exception as e_setSourceWidget:
-            print(f"ERROR_MME: Exception during setData for sourcewidget: {e_setSourceWidget}")
+            logger.error(f"MOUSE_MOVE_EVENT: Exception during setData for sourcewidget: {e_setSourceWidget}")
 
 
-        print("DEBUG_MME: Setting application/x-customplotitem MIME data (THE CRUCIAL MARKER)")
         try:
             mime_data.setData("application/x-customplotitem", QByteArray()) # The marker
-            print("DEBUG_MME: application/x-customplotitem MIME data SET") # Confirmation
         except Exception as e_setCustomPlotItem:
-            print(f"ERROR_MME: Exception during setData for application/x-customplotitem: {e_setCustomPlotItem}")
+            logger.error(f"MOUSE_MOVE_EVENT: Exception during setData for application/x-customplotitem: {e_setCustomPlotItem}")
 
-
-        print("DEBUG_MME: Setting MimeData on QDrag object")
         drag.setMimeData(mime_data)
-        print("DEBUG_MME: MimeData set on QDrag")
 
-        print("DEBUG_MME: Preparing pixmap")
         try:
             pixmap = QPixmap(self.size())
             self.render(pixmap)
             drag.setPixmap(pixmap)
             drag.setHotSpot(event.pos() - self.rect().topLeft())
-            print("DEBUG_MME: Pixmap prepared and set")
         except Exception as e_pixmap:
-            print(f"ERROR_MME: Exception during pixmap creation/setting: {e_pixmap}")
+            logger.error(f"MOUSE_MOVE_EVENT: Exception during pixmap creation/setting: {e_pixmap}")
             # If self.render() or self.size() somehow trigger the pickle error via self.source
 
-        print("DEBUG_MME: Calling drag.exec_()")
         try:
             drag.exec_(Qt.MoveAction)
-            print("DEBUG_MME: drag.exec_() completed")
         except Exception as e_drag:
-            print(f"ERROR_MME: Error during drag.exec_(): {e_drag}")
+            logger.error(f"MOUSE_MOVE_EVENT: Error during drag.exec_(): {e_drag}")
 
         self._drag_start_position = None
-        print("DEBUG_MME: mouseMoveEvent end")
 
     def remove_item(self):
         self.parent().remove_item(self.trace, self)
