@@ -5,6 +5,7 @@ from PyQt5.QtCore import (QCoreApplication, QPoint, QSettings, QSize, Qt,
 from PyQt5.QtGui import QIcon, QKeyEvent
 from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QLabel,
                              QMainWindow, QMessageBox, QSplitter)
+import pyqtgraph_patch  # Import the patch
 
 from data_file_widget import DataFileWidget
 from plot_manager import PlotManager
