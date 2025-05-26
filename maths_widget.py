@@ -12,6 +12,8 @@ import numpy as np
 import pickle
 import time
 
+from imports import install_and_import
+
 from var_list_widget import VarListWidget
 
 from maths.filter import FilterSpec
@@ -22,15 +24,8 @@ from maths.running_minmax import RunningMinMaxSpec
 from data_model import DataItem
 from docked_widget import DockedWidget
 
-try:
-    from py_expression_eval import Parser
-except ModuleNotFoundError:
-    import subprocess
-    import sys
-
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "py_expression_eval"])
-    from py_expression_eval import Parser
-
+py_expression_eval = install_and_import("py_expression_eval")
+from py_expression_eval import Parser
 
 class DockedMathsWidget(DockedWidget):
 
