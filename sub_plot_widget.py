@@ -4,12 +4,14 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMenu, QAction, QApplication
 from PyQt5.QtCore import Qt, QVariant
 import pyqtgraph as pg
 from flow_layout import FlowLayout
+from logging_config import get_logger
 
 import pickle
 import numpy as np
 from data_model import DataItem
 from custom_plot_item import CustomPlotItem
 
+logger = get_logger(__name__)
 
 class SubPlotWidget(QWidget):
     # Plot colors picked from here: https://colorbrewer2.org/#type=qualitative&scheme=Set1&n=8
@@ -201,4 +203,4 @@ class SubPlotWidget(QWidget):
     def _copy_to_clipboard(self):
         cb = QApplication.clipboard()
         cb.setPixmap(self.grab())
-        print("Plot copied to clipboard.")
+        logger.info("Plot copied to clipboard.")
