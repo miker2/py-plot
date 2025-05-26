@@ -30,8 +30,6 @@ from py_expression_eval import Parser
 
 logger = get_logger(__name__)
 
-logger = get_logger(__name__)
-
 
 class DockedMathsWidget(DockedWidget):
 

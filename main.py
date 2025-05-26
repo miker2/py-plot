@@ -422,7 +422,6 @@ class PyPlot(QMainWindow):
         if ext.lower() != os.path.extsep + _PLOTLIST_EXT:
             fname += os.path.extsep + _PLOTLIST_EXT
         with open(fname, 'w') as fp:
-            logger.debug(plotlist)
             print(plotlist, file=fp)
 
         self._set_last_dir("last_plotlist_dir", os.path.dirname(fname))

@@ -243,7 +243,7 @@ class PlotAreaWidget(QWidget):
         # Generate unique object name for the SubPlotWidget
         subplot_object_name = f"subplot_tab{self._plot_manager.tabs.currentIndex()}_area{self._next_subplot_idx}"
         self._next_subplot_idx += 1
-        
+
         subplot = SubPlotWidget(self, object_name_override=subplot_object_name) # Pass unique name
         subplot.move_cursor(self._plot_manager._time)
         subplot.set_xlimits(self._plot_manager.range_slider.min(), self._plot_manager.range_slider.max())
