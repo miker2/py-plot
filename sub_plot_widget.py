@@ -666,4 +666,3 @@ class SubPlotWidget(QWidget):
         cb.setPixmap(self.grab())
         print("Plot copied to clipboard.")
 
-[end of sub_plot_widget.py]
