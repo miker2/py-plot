@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QTabWidget, QMess
     QMenu, QAction, QApplication, QDialog
 from filter_box_widget import FilterBoxWidget
 from var_list_widget import VarListWidget
+from logging_config import get_logger
 
 import csv
 import math
@@ -18,6 +19,8 @@ import simlog_decode
 from imports import install_and_import
 
 pyarrow = install_and_import("pyarrow")
+
+logger = get_logger(__name__)
 
 
 class DataFileWidget(QWidget):
@@ -140,10 +143,10 @@ class DataFileWidget(QWidget):
 
         for idx in range(self.tabs.count()):
             t_range = self.tabs.widget(idx).time_range
-            # print(f"idx: {idx} - Time range: {t_range}")
+            logger.debug(f"idx: {idx} - Time range: {t_range}")
             min_time = min(min_time, t_range[0])
             max_time = max(max_time, t_range[1])
-        # print(f"min_time: {min_time}, max_time: {max_time}")
+        logger.debug(f"min_time: {min_time}, max_time: {max_time}")
 
         # TODO(rose@) replace this with signal/slot logic
         self.controller.plot_manager.update_slider_limits(min_time, max_time)
@@ -351,5 +354,5 @@ class ParquetLoader(FileLoader):
 
         except Exception as ex:
             # If we've gotten here, this likely isn't a parquet file.
-            print(ex)
+            logger.error(f"Error loading parquet file: {ex}")
             QMessageBox.critical(caller, f"Unable to load {filename}. Does not appear to be a valid parquet file.")

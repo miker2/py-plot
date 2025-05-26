@@ -3,6 +3,7 @@
 from PyQt5.QtCore import Qt, pyqtSlot, QRect
 from PyQt5.QtWidgets import QLabel, QMenu, QAction
 from PyQt5.QtGui import QPalette, QPixmap, QPainter
+from logging_config import get_logger
 
 try:
     from PyQt5.QtGui import QApplication
@@ -15,6 +16,7 @@ import numpy as np
 
 import graph_utils
 
+logger = get_logger(__name__)
 
 class CustomPlotItem(QLabel):
     PEN_WIDTH = 2

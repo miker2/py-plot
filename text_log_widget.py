@@ -5,12 +5,14 @@ from PyQt5.QtWidgets import QAbstractItemView, QStyledItemDelegate, QStyleOption
 from PyQt5.QtGui import QPalette, QFont
 
 from text_log_model import TextLogModel, TextLogEntry, SeverityFilterProxyModel
+from logging_config import get_logger
 
 import os
 import numpy as np
 
 import text_log_decode as tld
 
+logger = get_logger(__name__)
 
 # TODO:
 #  [ ] Create text log loader
@@ -32,7 +34,7 @@ class DockedTextLogWidget(QDockWidget):
         try:
             pm = parent.plot_manager
         except:
-            print(f"Unable to get plot manager from parent (of type {type(parent).__name__})")
+            logger.error(f"Unable to get plot manager from parent (of type {type(parent).__name__})")
             pm = None
 
         self._text_log = TextLogWidget(parent=self, source=source, plot_manager=pm)
@@ -122,18 +124,17 @@ class TextLogWidget(QTableView):
     def set_source(self, source):
         self._source = source
         if self._source:
-
-            print(f"[{type(self).__name__}] Source is '{self._source.filename}'")
+            logger.info(f"Source is '{self._source.filename}'")
             model = None
             # Try to find a corresponding data file:
             base, ext = os.path.splitext(source.filename)
             txt_log = base + ".txt"
             if os.path.exists(txt_log):
-                print(f"Corresponding text log: {txt_log}")
+                logger.info(f"Corresponding text log: {txt_log}")
                 # Create the model and pass it to the proxy model
                 model = TextLogModel(txt_log)
             else:
-                print("No corresponding text log exists.")
+                logger.warning("No corresponding text log exists.")
 
             self._proxy_model.setSourceModel(model)
 
@@ -174,9 +175,6 @@ class TextLogWidget(QTableView):
         # Now find the first message from the same tick:
         first_same_tick_idx = ticks.index(ticks[newest_idx])
 
-        # print(f"For this tick, you want rows {first_same_tick_idx}-{newest_idx}")
-        # print(f" -- Values: {ticks[slice(first_same_tick_idx, newest_idx+1)]}")
-
         # Use the first column here for convenience. Ultimately, the whole row will be selected
         first_model_idx = self._proxy_model.index(first_same_tick_idx, 0)
         last_model_idx = self._proxy_model.index(newest_idx, 0)
@@ -197,7 +195,7 @@ class TextLogWidget(QTableView):
         if self._plot_manager and self._do_reverse_sync:
             self._plot_manager.set_tick(tick)
         else:
-            print(f"[{type(self).__name__}] Selection is at tick {tick}.")
+            logger.debug(f"Selection is at tick {tick}.")
             self.update(tick)
 
     def set_max_severity(self, severity):

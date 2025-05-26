@@ -3,6 +3,9 @@
 from PyQt5.QtCore import QAbstractListModel, QModelIndex, QVariant, Qt
 
 import numpy as np
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class DataItem(object):
@@ -46,7 +49,7 @@ class DataModel(QAbstractListModel):
             freq = int(round(1 / self._avg_dt))
         except ZeroDivisionError:
             freq = 0
-        print(f"Loaded {data_loader.source} which has a dt of {self._avg_dt} sec and a sampling rate of {freq} Hz")
+        logger.info(f"Loaded {data_loader.source} which has a dt of {self._avg_dt:.6f} sec and a sampling rate of {freq} Hz")
 
         self._time_offset = 0
 
@@ -104,5 +107,5 @@ class DataModel(QAbstractListModel):
         try:
             data = self._raw_data[name]
         except KeyError:
-            print(f"Unknown key: {name}")
+            logger.warning(f"Unknown key: {name}")
         return data

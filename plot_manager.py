@@ -6,17 +6,19 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QInputDialog, QLin
 
 from QRangeSlider import QRangeSlider
 from sub_plot_widget import SubPlotWidget
+from logging_config import get_logger
 
 import math
 import graph_utils
 
+logger = get_logger(__name__)
 
 def _disp_layout_contents(layout):
-    print(f"There are {layout.count()} items in the layout")
+    logger.debug(f"There are {layout.count()} items in the layout")
     for i in range(layout.count()):
-        print(f"{i} : {layout.itemAt(i)}")
+        logger.debug(f"{i} : {layout.itemAt(i)}")
         try:
-            print(f"      {layout.itemAt(i).widget()}")
+            logger.debug(f"      {layout.itemAt(i).widget()}")
         except:
             pass
 
@@ -109,7 +111,7 @@ class PlotManager(QWidget):
             # TODO: This seems to have a bug on macOS - look into it.
             # reproduce by right-clicking
             tab_idx = self.tabs.tabBar().tabAt(pos)
-            print(f"Tab idx: {tab_idx}")
+            logger.debug(f"Tab idx: {tab_idx}")
 
             rename_act = QAction("rename...")
             rename_act.setStatusTip("Rename the tab")
@@ -136,7 +138,7 @@ class PlotManager(QWidget):
             self.tabs.setTabText(idx, text)
 
     def move_cursor(self, positive, modifier):
-        # print(f"Move cursor {'Right' if positive else 'Left'}")
+        logger.debug(f"Move cursor {'Right' if positive else 'Left'}")
         mult = 1
         if modifier & Qt.ControlModifier:
             mult *= 5
@@ -248,7 +250,7 @@ class PlotAreaWidget(QWidget):
 
         self._link_axes()
 
-        # _disp_layout_contents(self.plot_area)
+        _disp_layout_contents(self.plot_area)
 
     def add_subplot_above(self, subplot):
         idx = self._get_index(subplot)
@@ -265,7 +267,7 @@ class PlotAreaWidget(QWidget):
         item = self.plot_area.takeAt(self.plot_area.indexOf(subplot))
         subplot.close()
 
-        # _disp_layout_contents(self.plot_area)
+        _disp_layout_contents(self.plot_area)
 
         if self.plot_area.count() <= 1:
             # Nothing else to do here
@@ -276,7 +278,7 @@ class PlotAreaWidget(QWidget):
         self._link_axes()
 
     def update_plot_xrange(self, val=None):
-        # print(f"Value: {val}, start: start: {self.range_slider.start()}, end: {self.range_slider.end()}")
+        logger.debug(f"Value: {val}, start: {self._plot_manager.range_slider.start()}, end: {self._plot_manager.range_slider.end()}")
         # Because plots are linked we only need to do this for the first plot. Others will follow suite.
         self._get_plot(0).pw.setXRange(min=self._plot_manager.range_slider.start(),
                                        max=self._plot_manager.range_slider.end(),
@@ -319,7 +321,7 @@ class PlotAreaWidget(QWidget):
         if clear_existing:
             while self.plot_area.count() > requested_count:
                 idx = self.plot_area.count() - 1
-                print("Plot at idx {idx} : {self._get_plot(idx)}")
+                logger.debug(f"Plot at idx {idx} : {self._get_plot(idx)}")
                 self.remove_subplot(self._get_plot(self.plot_area.count() - 1))
 
         # Walk the list of traces and produce the plots.
@@ -342,4 +344,4 @@ class PlotAreaWidget(QWidget):
     def _copy_to_clipboard(self):
         cb = QApplication.clipboard()
         cb.setPixmap(self.grab())
-        print("Plot copied to clipboard.")
+        logger.info("Plot copied to clipboard.")

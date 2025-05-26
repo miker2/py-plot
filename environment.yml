@@ -21,6 +21,7 @@ dependencies:
   - shtab
   - urdfpy
   - pip:
+    - ipdb
     - py-expression-eval
     - pywavefront
 
