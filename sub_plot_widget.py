@@ -404,13 +404,8 @@ class SubPlotWidget(QWidget):
 
                 # Re-populate FlowLayout
                 logger.debug(f"DROP: Labels layout repopulating for '{self.objectName()}'.")
-                # (Ensure this logic is sound: clear _labels, then add all from _traces in order)
-                while self._labels.count() > 0:
-                    item = self._labels.takeAt(0)
-                    # item.widget().hide() # Optional
-                for lbl_widget_in_trace in self._traces:
-                    self._labels.addWidget(lbl_widget_in_trace)
-                    lbl_widget_in_trace.show()
+                self._labels.insertWidget(new_idx, dragged_label_widget)
+                dragged_label_widget.show()
                 logger.debug(f"DROP: Labels layout repopulated for '{self.objectName()}'.")
 
 
