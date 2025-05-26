@@ -74,7 +74,7 @@ class SubPlotWidget(QWidget):
         self.pw.scene().sigMouseClicked.connect(self._on_scene_mouse_click_event)
 
         # Drop indicator for visual feedback during drag-and-drop of labels
-        self._drop_indicator = QFrame(self) 
+        self._drop_indicator = QFrame(self)
         self._drop_indicator.setFrameShape(QFrame.VLine)
         self._drop_indicator.setFrameShadow(QFrame.Sunken)
         # Get the highlight color from the palette
@@ -131,7 +131,7 @@ class SubPlotWidget(QWidget):
             logger.debug(f"Has 'application/x-customplotitem': {e.mimeData().hasFormat('application/x-customplotitem')}")
         else:
             logger.debug("No MimeData found in event.")
-        
+
         # Existing logic:
         if e.mimeData().hasFormat("application/x-customplotitem") or \
            e.mimeData().hasFormat("application/x-DataItem"):
@@ -152,12 +152,12 @@ class SubPlotWidget(QWidget):
 
                 if self._labels.count() > 0:
                     drop_idx = self._get_drop_index(e.pos())
-                    
+
                     # Determine reference widget for Y position and height
                     # Use item at drop_idx, or last item if drop_idx is count (append)
                     ref_idx_for_y = min(drop_idx, self._labels.count() - 1)
                     if ref_idx_for_y < 0 : ref_idx_for_y = 0 # Ensure valid index if count became 0 mid-drag
-                    
+
                     if self._labels.count() > 0 : # Re-check count as it might change due to external factors
                         ref_widget_for_y = self._labels.itemAt(ref_idx_for_y).widget()
                         if ref_widget_for_y:
@@ -195,17 +195,17 @@ class SubPlotWidget(QWidget):
                             marker_x = self.contentsRect().left() + 2
 
 
-                    self._drop_indicator.setGeometry(marker_x - self._drop_indicator.width() // 2, 
+                    self._drop_indicator.setGeometry(marker_x - self._drop_indicator.width() // 2,
                                                      marker_y,
-                                                     self._drop_indicator.width(), 
+                                                     self._drop_indicator.width(),
                                                      target_height)
                     self._drop_indicator.show()
                     self._drop_indicator.raise_()
-                
+
                 else: # Labels area but no labels currently
                     content_rect_top = self.contentsRect().top()
                     label_area_height = self.pw.geometry().top() - content_rect_top
-                    
+
                     self._drop_indicator.setGeometry(self.contentsRect().left() + 2,
                                                      content_rect_top,
                                                      self._drop_indicator.width(),
@@ -214,7 +214,7 @@ class SubPlotWidget(QWidget):
                     self._drop_indicator.raise_()
             else: # Over plot area or otherwise not in a valid label drop zone for customplotitem
                 self._drop_indicator.hide()
-            
+
             e.acceptProposedAction() # Accept for custom plot item
 
         elif e.mimeData().hasFormat("application/x-DataItem"):
@@ -222,7 +222,7 @@ class SubPlotWidget(QWidget):
             # but we MUST accept the event to allow dropEvent to be called.
             self._drop_indicator.hide() # Ensure indicator is hidden
             e.acceptProposedAction() # Crucially accept the event
-        
+
         else:
             # Unknown type, hide indicator and ignore.
             self._drop_indicator.hide()
@@ -276,17 +276,17 @@ class SubPlotWidget(QWidget):
             else:
                 # Drop is likely in the lower region (the plot graph itself)
                 idx_for_insertion = len(self._traces) # Append
-            
+
             if actual_source_widget == self: # Reordering within the same widget
                 dragged_item_widget = None
                 original_idx = -1
                 for i, trace_item in enumerate(self._traces):
                     # Using trace.name() as CustomPlotItem.name also calls this.
-                    if trace_item.trace.name() == plot_name: 
+                    if trace_item.trace.name() == plot_name:
                         dragged_item_widget = trace_item
                         original_idx = i
                         break
-                
+
                 if dragged_item_widget is None:
                     logger.error(f"Could not find dragged item '{plot_name}' in self for reordering.")
                     e.ignore()
@@ -298,12 +298,12 @@ class SubPlotWidget(QWidget):
                 # Remove from _traces. Note: dragged_item_widget is the object, not pg_trace
                 # Popping _traces first.
                 self._traces.pop(original_idx)
-                
+
                 # Adjust new_idx if original_idx was before it, due to the pop operation
                 if new_idx > original_idx:
                     new_idx -= 1
                 # FlowLayout does not have insertWidget. Need to rebuild.
-                
+
                 # Store all label widgets, remove the dragged one from list
                 all_labels = []
                 dragged_label_for_reinsert = None
@@ -312,7 +312,7 @@ class SubPlotWidget(QWidget):
                     if lbl_widget == dragged_item_widget: # CustomPlotItem is a QLabel
                          dragged_label_for_reinsert = self._labels.takeAt(i).widget() # Take it
                          break # Found and took the one we need to re-insert
-                
+
                 # If not found by object equality, try by name (less robust)
                 if dragged_label_for_reinsert is None:
                     for i in range(self._labels.count()):
@@ -320,7 +320,7 @@ class SubPlotWidget(QWidget):
                         if lbl_widget.name == plot_name : # CustomPlotItem.name
                             dragged_label_for_reinsert = self._labels.takeAt(i).widget()
                             break
-                
+
                 if dragged_label_for_reinsert is None:
                     logger.error(f"Could not find label widget for '{plot_name}' to reorder.")
                     # We already modified self._traces, this state is inconsistent.
@@ -333,7 +333,7 @@ class SubPlotWidget(QWidget):
                 remaining_labels = []
                 while self._labels.count() > 0:
                     remaining_labels.append(self._labels.takeAt(0).widget())
-                
+
                 # Reconstruct the list of labels in the new order
                 # new_idx here is relative to the list *after* removing the item.
                 # If new_idx was for appending, it should be len(remaining_labels)
@@ -356,7 +356,7 @@ class SubPlotWidget(QWidget):
 
                 # Update colors
                 self._update_all_trace_colors()
-                
+
                 e.acceptProposedAction()
 
             else: # Moving from a different widget (actual_source_widget != self)
@@ -368,7 +368,7 @@ class SubPlotWidget(QWidget):
                 dragged_label_widget = e.source()
                 plot_data_item = dragged_label_widget.trace # The pyqtgraph.PlotDataItem
                 # original_data_source = dragged_label_widget.source # Store if needed for creating new CustomPlotItem
-                
+
                 # 1. CRITICAL: Remove from source widget FIRST.
                 if actual_source_widget:
                     logger.debug(f"DROP: Instructing source widget '{actual_source_widget.objectName()}' to remove item '{plot_name}' (is_move_operation=True).")
@@ -421,10 +421,10 @@ class SubPlotWidget(QWidget):
                         logger.debug(f"DROP: Disconnected timeValueChanged from old plot manager for '{dragged_label_widget.text()}'.")
                     except TypeError:
                         logger.debug(f"DROP: Signal timeValueChanged not connected/already disconnected for '{dragged_label_widget.text()}' from old plot manager.")
-                
+
                 self.parent().plot_manager().timeValueChanged.connect(dragged_label_widget.on_time_changed)
                 logger.debug(f"DROP: Connected timeValueChanged to new plot manager for '{dragged_label_widget.text()}'.")
-                
+
                 self.update_plot_yrange()
                 self._update_all_trace_colors()
                 self.cidx = len(self._traces) # Update cidx after all list modifications
@@ -456,7 +456,7 @@ class SubPlotWidget(QWidget):
                 logger.debug(f"Calling plot_data_from_source with var_name='{selected.var_name}' and source='{e.source()}'")
                 self.plot_data_from_source(selected.var_name, e.source())
                 logger.debug("Returned from plot_data_from_source successfully")
-                e.accept() 
+                e.accept()
             except Exception as ex_plot:
                 logger.error(f"Exception during plot_data_from_source or accept: {ex_plot}")
                 e.ignore() # Ensure event is ignored on error
@@ -489,7 +489,7 @@ class SubPlotWidget(QWidget):
                 # If Y is within this widget's height range AND X is to its left (or in its left half)
                 if drop_pos_in_widget_coords.x() < geom.left() + geom.width() / 2:
                     return i
-        
+
         # If drop position is below or to the right of all items on their respective lines
         return self._labels.count()
 
@@ -513,8 +513,8 @@ class SubPlotWidget(QWidget):
         y_data = source.model().get_data_by_name(name)
         if y_data is None:
             logger.error(f"y_data for '{name}' is None. Aborting plot.")
-            return 
-        
+            return
+
         item = self.pw.getPlotItem().plot(x=source.time,
                                           y=y_data,
                                           pen=pg.mkPen(color=self._get_color(self.cidx),
@@ -527,7 +527,7 @@ class SubPlotWidget(QWidget):
         label = CustomPlotItem(self, item, source, self.parent().plot_manager()._tick)
         self._traces.append(label)
         self._labels.addWidget(label)
-        
+
         # Connect signals for the new label
         # Time changed connection is fine
         self.parent().plot_manager().timeValueChanged.connect(label.on_time_changed)
@@ -544,12 +544,12 @@ class SubPlotWidget(QWidget):
             label.setProperty("onClose_slot_plot_data_from_source", disconnect_slot)
         else:
             logger.info(f"Source object {type(source).__name__} does not have an onClose signal. Signal removal might not be tied to source closure for this item: {name}")
-        
+
         # self.cidx += 1 # cidx will be updated based on len(_traces)
-        # self.update_plot_yrange() will be called by _update_all_trace_colors if needed, 
+        # self.update_plot_yrange() will be called by _update_all_trace_colors if needed,
         # or can be called separately. For now, let _update_all_trace_colors handle colors.
         # The original plot_data_from_source call to self.update_plot_yrange() is kept.
-        self.update_plot_yrange() 
+        self.update_plot_yrange()
         self._update_all_trace_colors() # Ensure all colors are correct after adding a new trace
         self.cidx = len(self._traces) # Update cidx based on the actual number of traces
 
@@ -564,7 +564,7 @@ class SubPlotWidget(QWidget):
         self.pw.removeItem(trace)
 
         # Remove from FlowLayout
-        self._labels.removeWidget(label) 
+        self._labels.removeWidget(label)
         # Note: removeWidget just takes it from the layout's control.
         # The widget itself is not deleted by this call.
 
@@ -596,7 +596,7 @@ class SubPlotWidget(QWidget):
             # Its parent should ideally be the target SubPlotWidget now, or will be set by it.
             logger.debug(f"Not closing label '{label.text()}' because is_move_operation is True. Current parent: {label.parent()}")
             # Ensure it's no longer visible in this subplot if it wasn't already hidden by removeWidget
-            label.hide() 
+            label.hide()
 
 
         # Update colors and cidx (if still used) in this subplot
@@ -657,7 +657,7 @@ class SubPlotWidget(QWidget):
             else:
                 # This case should ideally not happen if _traces is managed correctly.
                 logger.warning(f"Item at index {i} in self._traces is not a CustomPlotItem.")
-        
+
         # If y-range needs to be updated after color/pen style changes that might affect visibility
         # self.update_plot_yrange() # Consider if this is needed here or if it's handled sufficiently elsewhere.
                                   # For now, let's keep it focused on colors.

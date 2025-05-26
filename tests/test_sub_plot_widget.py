@@ -52,7 +52,7 @@ class MockPlotManager(QWidget):
         self._tick = 0
         self.timeValueChanged = MockSignal()
         self.range_slider = MockRangeSlider()
-        self._controller = None 
+        self._controller = None
         self.tabs = MockTabs()
 
 class MockPlotAreaWidget(QWidget):
@@ -72,9 +72,9 @@ class MockDataSource:
         self.onClose = MockSignal()
         self.idx = None
 
-    def model(self): 
-        return self 
-    
+    def model(self):
+        return self
+
     def get_data_by_name(self, name):
         return self._y_data_dict.get(name)
 
@@ -83,11 +83,11 @@ class MockDataSource:
 def subplot_widget_setup(qapp): # qapp is a standard fixture from pytest-qt
     # Create mock parent
     mock_parent_plot_area = MockPlotAreaWidget()
-    
+
     widget = SubPlotWidget(parent=mock_parent_plot_area, object_name_override="test_subplot_pytest")
-    
+
     yield widget # Provide the widget to the test
-    
+
     # Teardown
     widget.deleteLater()
     mock_parent_plot_area.deleteLater()
@@ -102,12 +102,12 @@ def test_instantiation(subplot_widget_setup):
 def test_add_trace_programmatic(subplot_widget_setup):
     '''Test programmatically adding a trace to SubPlotWidget.'''
     subplot_widget = subplot_widget_setup
-    
+
     # Prepare mock data
     time_data = np.array([0.0, 0.1, 0.2, 0.3])
     y_data = np.array([1.0, 1.5, 1.3, 1.8])
     trace_name = "test_signal_1"
-    
+
     mock_source = MockDataSource(time_data, {trace_name: y_data})
 
     # Call plot_data_from_source
@@ -116,10 +116,10 @@ def test_add_trace_programmatic(subplot_widget_setup):
     # Verifications
     assert len(subplot_widget._traces) == 1, "One trace should be in _traces list."
     assert isinstance(subplot_widget._traces[0], CustomPlotItem), "_traces item should be a CustomPlotItem."
-    
+
     assert subplot_widget._traces[0].text().startswith(trace_name), \
                     f"Label text should start with trace name. Got: '{subplot_widget._traces[0].text()}'"
-    
+
     assert subplot_widget._labels.count() == 1, "One label widget should be in FlowLayout."
     label_widget_in_layout = subplot_widget._labels.itemAt(0).widget()
     assert isinstance(label_widget_in_layout, CustomPlotItem), "Widget in layout should be CustomPlotItem."
@@ -128,16 +128,16 @@ def test_add_trace_programmatic(subplot_widget_setup):
     expected_color_str = SubPlotWidget.COLORS[0]
     plot_data_item_pen = subplot_widget._traces[0].trace.opts['pen']
     assert plot_data_item_pen.color().name() == expected_color_str, "PlotDataItem pen color incorrect."
-    
+
     label_palette_color = label_widget_in_layout.palette().color(QPalette.WindowText)
     assert label_palette_color.name() == expected_color_str, "Label text color incorrect."
-    
+
     num_plot_items = 0
     for item in subplot_widget.pw.getPlotItem().items:
         if isinstance(item, pyqtgraph.PlotDataItem):
             num_plot_items +=1
     assert num_plot_items == 1, "PlotWidget should have 1 PlotDataItem."
-    
+
     found_plot_data_item = False
     for item in subplot_widget.pw.getPlotItem().items:
         if isinstance(item, pyqtgraph.PlotDataItem) and item.name() == trace_name:
@@ -153,7 +153,7 @@ def test_remove_trace_programmatic(subplot_widget_setup):
     time_data = np.array([0.0, 0.1, 0.2, 0.3])
     y_data1 = np.array([1.0, 1.5, 1.3, 1.8])
     trace_name1 = "test_signal_to_remove"
-    
+
     mock_source1 = MockDataSource(time_data, {trace_name1: y_data1})
     subplot_widget.plot_data_from_source(trace_name1, mock_source1)
 
@@ -177,7 +177,7 @@ def test_remove_trace_programmatic(subplot_widget_setup):
     # 4. Verifications after removal
     assert len(subplot_widget._traces) == 1, "One trace should remain in _traces list."
     assert added_label_item not in subplot_widget._traces, "Removed label should not be in _traces."
-    
+
     assert subplot_widget._labels.count() == 1, "One label widget should remain in FlowLayout."
     remaining_label_in_layout = subplot_widget._labels.itemAt(0).widget()
     assert remaining_label_in_layout.text().startswith(trace_name2), \
@@ -189,13 +189,13 @@ def test_remove_trace_programmatic(subplot_widget_setup):
     assert remaining_pg_item_pen.color().name() == expected_color_str, "Remaining PlotDataItem pen color incorrect after removal."
     remaining_label_palette_color = remaining_label_in_layout.palette().color(QPalette.WindowText)
     assert remaining_label_palette_color.name() == expected_color_str, "Remaining label text color incorrect after removal."
-    
+
     plot_data_item_count = 0
     for item in subplot_widget.pw.getPlotItem().items:
         if isinstance(item, pyqtgraph.PlotDataItem):
             plot_data_item_count += 1
     assert plot_data_item_count == 1, "PlotWidget should have 1 PlotDataItem remaining."
-    
+
     found_removed_pg_item = False
     for item in subplot_widget.pw.getPlotItem().items:
         if item == added_pg_trace_item:
@@ -214,7 +214,7 @@ def test_add_and_remove_multiple_traces(subplot_widget_setup):
         "S2": np.array([2.0, 2.1, 2.2, 2.3]),
         "S3": np.array([3.0, 3.1, 3.2, 3.3])
     }
-    
+
     source_s1 = MockDataSource(time_data, {"S1": trace_data["S1"]})
     source_s2 = MockDataSource(time_data, {"S2": trace_data["S2"]})
     source_s3 = MockDataSource(time_data, {"S3": trace_data["S3"]})
@@ -229,7 +229,7 @@ def test_add_and_remove_multiple_traces(subplot_widget_setup):
     assert subplot_widget._traces[0].trace.name() == "S1"
     assert subplot_widget._traces[1].trace.name() == "S2"
     assert subplot_widget._traces[2].trace.name() == "S3"
-    
+
     # Check initial colors (optional, but good for consistency)
     assert subplot_widget._traces[0].trace.opts['pen'].color().name() == SubPlotWidget.COLORS[0]
     assert subplot_widget._traces[1].trace.opts['pen'].color().name() == SubPlotWidget.COLORS[1]
@@ -250,11 +250,11 @@ def test_add_and_remove_multiple_traces(subplot_widget_setup):
     assert len(subplot_widget._traces) == 2
     assert subplot_widget._traces[0].trace.name() == "S1"
     assert subplot_widget._traces[1].trace.name() == "S3"
-    
+
     # Verify colors of remaining traces (S1 should be COLORS[0], S3 should be COLORS[1])
     assert subplot_widget._traces[0].trace.opts['pen'].color().name() == SubPlotWidget.COLORS[0], "S1 color wrong after S2 removal"
     assert subplot_widget._traces[1].trace.opts['pen'].color().name() == SubPlotWidget.COLORS[1], "S3 color wrong after S2 removal"
-    
+
     # Verify labels in FlowLayout
     assert subplot_widget._labels.count() == 2
     assert subplot_widget._labels.itemAt(0).widget().trace.name() == "S1"
@@ -267,12 +267,12 @@ def test_add_and_remove_multiple_traces(subplot_widget_setup):
     # 3. (Optional) Remove another trace (e.g., S1 - the first one)
     print("DEBUG_TEST: Removing first trace 'S1'")
     subplot_widget.remove_item(trace_s1_pg, label_s1, is_move_operation=False)
-    
+
     # Verify state after removing S1
     assert len(subplot_widget._traces) == 1
     assert subplot_widget._traces[0].trace.name() == "S3"
     assert subplot_widget._traces[0].trace.opts['pen'].color().name() == SubPlotWidget.COLORS[0], "S3 color wrong after S1 removal"
-    
+
     assert subplot_widget._labels.count() == 1
     assert subplot_widget._labels.itemAt(0).widget().trace.name() == "S3"
 
