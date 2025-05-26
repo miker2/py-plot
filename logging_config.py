@@ -38,7 +38,7 @@ def setup_logging(log_level=logging.INFO):
 
     # Console handler - only INFO and above
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)  # Only INFO and above
+    console_handler.setLevel(log_level)
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
