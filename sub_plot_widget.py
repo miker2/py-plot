@@ -358,102 +358,78 @@ class SubPlotWidget(QWidget):
                 e.acceptProposedAction()
 
             else: # Moving from a different widget (actual_source_widget != self)
-                # --- Start of new logic for re-parenting and re-using ---
-                print(f"DEBUG_DROP: Move-In operation: plot_name='{plot_name}' from '{source_widget_name_from_mime}' to '{self.objectName()}'")
+                print(f"DEBUG_DROP: Move-In operation for plot '{plot_name}' from '{actual_source_widget.objectName()}' to '{self.objectName()}'.")
 
                 if not isinstance(e.source(), CustomPlotItem):
-                    print(f"ERROR_DROP: Drag source is not a CustomPlotItem for move-in. Type: {type(e.source())}")
-                    e.ignore()
-                    return
+                    print("ERROR_DROP: Drag source is not a CustomPlotItem during move operation.") # Use ERROR_DROP for new prints
+                    e.ignore(); return
+                dragged_label_widget = e.source()
+                plot_data_item = dragged_label_widget.trace # The pyqtgraph.PlotDataItem
+                # original_data_source = dragged_label_widget.source # Store if needed for creating new CustomPlotItem
                 
-                dragged_label_widget = e.source() # This is the CustomPlotItem being moved
-                plot_data_item = dragged_label_widget.trace # The existing pyqtgraph.PlotDataItem
-                # original_data_source = dragged_label_widget.source # The original data provider (e.g. VarListWidget)
-
-                print(f"DEBUG_DROP: Re-parenting label '{dragged_label_widget.text()}' from {actual_source_widget.objectName()} to {self.objectName()}")
-
-                # 1. Update Parent and Internal Subplot Widget Reference
-                dragged_label_widget.setParent(self) # Re-parent the QLabel to the new SubPlotWidget
-                dragged_label_widget._subplot_widget = self # Update internal reference
-
-                # 2. Add existing pyqtgraph trace to this plot's PlotWidget
-                #    The plot_data_item is already configured (pen, name, data).
-                #    We must remove it from the source plot and add it to the target plot.
-                #    This is handled by actual_source_widget.remove_item and then adding here.
-                #    Actual removal from source's PlotWidget is in actual_source_widget.remove_item.
-                if plot_data_item not in self.pw.getPlotItem().items:
-                    self.pw.addItem(plot_data_item)
-                    print(f"DEBUG_DROP: Added plot_data_item for '{plot_name}' to target plot {self.objectName()}.")
+                # 1. CRITICAL: Remove from source widget FIRST.
+                if actual_source_widget:
+                    print(f"DEBUG_DROP: Instructing source widget '{actual_source_widget.objectName()}' to remove item '{plot_name}' (is_move_operation=True).")
+                    actual_source_widget.remove_item(plot_data_item, dragged_label_widget, is_move_operation=True)
                 else:
-                    # This case implies the plot_data_item was somehow already in the target plot,
-                    # or it's the same item being re-added if actual_source_widget wasn't identified correctly.
-                    print(f"Warning_DROP: PlotDataItem for '{plot_name}' was already in target plot {self.objectName()} or is the same item.")
+                    print(f"ERROR_DROP: actual_source_widget is None for plot '{plot_name}'. Cannot remove from source.")
+                    e.ignore(); return
 
+                # 2. Now, add to target widget (self)
+                print(f"DEBUG_DROP: Re-parenting label '{dragged_label_widget.text()}' to '{self.objectName()}'.")
+                dragged_label_widget.setParent(self)
+                dragged_label_widget._subplot_widget = self
 
-                # 3. Determine insertion index for _traces and _labels
+                print(f"DEBUG_DROP: Adding plot_data_item for '{plot_name}' to target plot '{self.objectName()}'.")
+                if plot_data_item not in self.pw.getPlotItem().items:
+                    self.pw.addItem(plot_data_item) # Add existing PlotDataItem
+                else:
+                    print(f"Warning_DROP: PlotDataItem for '{plot_name}' was already in target plot '{self.objectName()}' before adding.")
+
+                # Determine insertion index
                 # Use idx_for_insertion which was determined earlier based on drop zone (label area vs plot area)
-                new_idx = idx_for_insertion
+                new_idx = idx_for_insertion # This was determined before the if/else actual_source_widget block
+                # The following logic for pos_in_labels_coords was part of the instructions, but idx_for_insertion already covers this.
+                # We will rely on idx_for_insertion directly.
+                # pos_in_labels_coords = self._labels.mapFromParent(e.pos()) # Map drop pos to FlowLayout's coordinate system
+                # if self._labels.rect().contains(pos_in_labels_coords): # Check if drop is within the FlowLayout's bounds
+                #     new_idx = self._get_drop_index(e.pos()) # Use original logic if inside labels area
+                # else: # Drop is outside labels area (e.g. on plot graph), append
+                #     new_idx = len(self._traces)
                 print(f"DEBUG_DROP: Determined new_idx for move-in: {new_idx}")
-                
-                # 4. Insert the dragged_label_widget into _traces and re-populate _labels
+
                 self._traces.insert(new_idx, dragged_label_widget)
-                self.cidx += 1 # Increment count of items
 
-                # Re-populate FlowLayout for labels
-                # Store all widgets from the layout that are not the one being moved.
-                # (This step might be redundant if actual_source_widget.remove_item already removed it from its old layout)
-                temp_labels_list = []
-                for i in range(self._labels.count()):
-                    widget = self._labels.itemAt(i).widget()
-                    if widget != dragged_label_widget:
-                        temp_labels_list.append(widget)
-                
-                # Clear the layout (widgets are not deleted, just removed from layout management)
+                # Re-populate FlowLayout
+                print(f"DEBUG_DROP: Labels layout repopulating for '{self.objectName()}'.")
+                # (Ensure this logic is sound: clear _labels, then add all from _traces in order)
                 while self._labels.count() > 0:
-                    layout_item = self._labels.takeAt(0)
-                    # if layout_item.widget():
-                    #     layout_item.widget().setParent(None) # Detach from old layout effectively
+                    item = self._labels.takeAt(0)
+                    # item.widget().hide() # Optional
+                for lbl_widget_in_trace in self._traces:
+                    self._labels.addWidget(lbl_widget_in_trace)
+                    lbl_widget_in_trace.show()
+                print(f"DEBUG_DROP: Labels layout repopulated for '{self.objectName()}'.")
 
-                # Add items in the new order from self._traces
-                for i, item_in_traces in enumerate(self._traces):
-                    self._labels.addWidget(item_in_traces) # addWidget handles reparenting if needed
-                    item_in_traces.show() # Ensure it's visible
-                print(f"DEBUG_DROP: Labels layout repopulated for {self.objectName()}.")
 
-                # 5. Signal Connections for the moved label
-                # Disconnect from old plot manager's timeValueChanged signal
-                if actual_source_widget and hasattr(actual_source_widget.parent(), 'plot_manager') and \
-                   hasattr(actual_source_widget.parent().plot_manager(), 'timeValueChanged'):
+                # Signal Connections
+                if actual_source_widget and hasattr(actual_source_widget.parent(), 'plot_manager'):
                     try:
                         actual_source_widget.parent().plot_manager().timeValueChanged.disconnect(dragged_label_widget.on_time_changed)
                         print(f"DEBUG_DROP: Disconnected timeValueChanged from old plot manager for '{dragged_label_widget.text()}'.")
-                    except TypeError: # Raised if the slot is not connected
-                        print(f"DEBUG_DROP: Signal timeValueChanged was not connected or already disconnected for '{dragged_label_widget.text()}' from old PM.")
+                    except TypeError:
+                        print(f"DEBUG_DROP: Signal timeValueChanged not connected/already disconnected for '{dragged_label_widget.text()}' from old plot manager.")
                 
-                # Connect to new plot manager's timeValueChanged signal
-                if hasattr(self.parent(), 'plot_manager') and hasattr(self.parent().plot_manager(), 'timeValueChanged'):
-                    self.parent().plot_manager().timeValueChanged.connect(dragged_label_widget.on_time_changed)
-                    print(f"DEBUG_DROP: Connected timeValueChanged to new plot manager for '{dragged_label_widget.text()}'.")
+                self.parent().plot_manager().timeValueChanged.connect(dragged_label_widget.on_time_changed)
+                print(f"DEBUG_DROP: Connected timeValueChanged to new plot manager for '{dragged_label_widget.text()}'.")
                 
-                # The original_data_source.onClose connection on dragged_label_widget should remain valid
-                # as 'original_data_source' (dragged_label_widget.source) doesn't change.
-
-                # 6. Update plot appearance
                 self.update_plot_yrange()
-                self._update_all_trace_colors() # This will update colors for all traces in this subplot
-                print(f"DEBUG_DROP: Plot y-range and colors updated for {self.objectName()}.")
-
-                # 7. Instruct the source widget to remove the item, marking it as a move operation
-                if actual_source_widget:
-                    print(f"DEBUG_DROP: Instructing source widget '{actual_source_widget.objectName()}' to remove item '{plot_name}' (as move).")
-                    actual_source_widget.remove_item(plot_data_item, dragged_label_widget, is_move_operation=True)
-                else:
-                    # This should ideally not be reached if actual_source_widget was identified.
-                    print(f"ERROR_DROP: actual_source_widget is None for plot '{plot_name}'. Cannot remove from source.")
+                self._update_all_trace_colors()
+                self.cidx = len(self._traces) # Update cidx after all list modifications
+                print(f"DEBUG_DROP: Plot y-range and colors updated for '{self.objectName()}'. cidx: {self.cidx}")
 
                 e.acceptProposedAction()
                 print(f"DEBUG_DROP: Move-in for '{plot_name}' completed and event accepted.")
-                # --- End of new logic ---
 
         elif e.mimeData().hasFormat("application/x-DataItem"):
             print("DEBUG: DropEvent for application/x-DataItem") # New debug print
@@ -689,3 +665,5 @@ class SubPlotWidget(QWidget):
         cb = QApplication.clipboard()
         cb.setPixmap(self.grab())
         print("Plot copied to clipboard.")
+
+[end of sub_plot_widget.py]
