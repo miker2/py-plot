@@ -337,7 +337,8 @@ class SubPlotWidget(QWidget):
                     logger.error(f"Could not find label widget for '{plot_name}' to reorder.")
                     # We already modified self._traces, this state is inconsistent.
                     # This path should ideally not be reached if dragged_item_widget was found.
-                    # For safety, try to restore _traces or ignore.
+                    # For safety, restore _traces and ignore drop event.
+                    self._traces.insert(original_idx, dragged_item_widget)
                     e.ignore()
                     return
 
