@@ -7,12 +7,22 @@ import pyqtgraph as pg
 from flow_layout import FlowLayout
 from logging_config import get_logger
 
+from typing import List
+
 import pickle
 import numpy as np
 from data_model import DataItem
 from custom_plot_item import CustomPlotItem
 
 logger = get_logger(__name__)
+
+# NOTE: This is here to ensure we aren't going to override the existing method
+assert(not hasattr(pg.PlotWidget, 'autoRangeEnabled'))
+class PatchedPlotWidget(pg.PlotWidget):
+
+    # Patch the pyqtgraph PlotWidget to resolve an internal exception
+    def autoRangeEnabled(self):
+        return self.plotItem.getViewBox().autoRangeEnabled()
 
 class SubPlotWidget(QWidget):
     # Plot colors picked from here: https://colorbrewer2.org/#type=qualitative&scheme=Set1&n=8
@@ -37,7 +47,9 @@ class SubPlotWidget(QWidget):
         self._labels = FlowLayout()
         v_box.addLayout(self._labels)
 
-        self.pw = pg.PlotWidget()
+        # NOTE: The line below was pg.PlotWidget(), but there's a bug internal to pyqtgraph. See:
+        #  https://github.com/pyqtgraph/pyqtgraph/issues/1854
+        self.pw = PatchedPlotWidget()
         # Adding stretch below ensures that the plow widget takes up as much space as possible
         # (labels take up only the minimum space possible)
         v_box.addWidget(self.pw, stretch=1)
@@ -63,7 +75,7 @@ class SubPlotWidget(QWidget):
 
         self.cidx = 0
 
-        self._traces = []
+        self._traces: List[CustomPlotItem] = []
 
         # We can just override the menu of the ViewBox here but I think a better solution
         # is to create a new object that derives from the ViewBox class and set up everything
