@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from PyQt5.QtCore import Qt, pyqtSlot, QRect
+from PyQt5.QtCore import Qt, pyqtSlot, QRect, QMimeData, QByteArray
 from PyQt5.QtWidgets import QLabel, QMenu, QAction
-from PyQt5.QtGui import QPalette, QPixmap, QPainter
+from PyQt5.QtGui import QPalette, QPixmap, QPainter, QDrag
 from logging_config import get_logger
 
 try:
@@ -11,6 +11,7 @@ except ImportError:
     from PyQt5.QtWidgets import QApplication
 
 import os
+import pickle # Add pickle
 import pyqtgraph as pg
 import numpy as np
 
@@ -32,6 +33,8 @@ class CustomPlotItem(QLabel):
         '''
 
         self.trace = plot_data_item
+        self._subplot_widget = parent # Store parent reference
+        self._drag_start_position = None # Initialize drag start position
 
         self.source = source
 
@@ -164,8 +167,59 @@ class CustomPlotItem(QLabel):
         if event.button() == Qt.LeftButton and self._close_btn_rect.contains(event.pos()):
             self.remove_item()
             event.accept()
+        elif event.button() == Qt.LeftButton:
+            self._drag_start_position = event.pos()
         else:
             super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if not (event.buttons() & Qt.LeftButton) or not self._drag_start_position:
+            return
+        if (event.pos() - self._drag_start_position).manhattanLength() < QApplication.startDragDistance():
+            return
+
+        drag = QDrag(self)
+        mime_data = QMimeData()
+
+        try:
+            mime_data.setText(self.trace.name())
+        except Exception as e_setText:
+            logger.error(f"MOUSE_MOVE_EVENT: Exception during setText: {e_setText}")
+            # This is where the pickling error might be if self.trace.name() is complex
+            # and indirectly tries to pickle self.source. Unlikely but possible.
+
+        try:
+            if self._subplot_widget and self._subplot_widget.objectName():
+                mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray(self._subplot_widget.objectName().encode()))
+            else:
+                logger.warning("MOUSE_MOVE_EVENT: _subplot_widget or its objectName not set.")
+                mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray())
+        except Exception as e_setSourceWidget:
+            logger.exception(f"MOUSE_MOVE_EVENT: Exception during setData for sourcewidget: {e_setSourceWidget}")
+
+
+        try:
+            mime_data.setData("application/x-customplotitem", QByteArray()) # The marker
+        except Exception as e_setCustomPlotItem:
+            logger.exception(f"MOUSE_MOVE_EVENT: Exception during setData for application/x-customplotitem: {e_setCustomPlotItem}")
+
+        drag.setMimeData(mime_data)
+
+        try:
+            pixmap = QPixmap(self.size())
+            self.render(pixmap)
+            drag.setPixmap(pixmap)
+            drag.setHotSpot(event.pos() - self.rect().topLeft())
+        except Exception as e_pixmap:
+            logger.exception(f"MOUSE_MOVE_EVENT: Exception during pixmap creation/setting: {e_pixmap}")
+            # If self.render() or self.size() somehow trigger the pickle error via self.source
+
+        try:
+            drag.exec_(Qt.MoveAction)
+        except Exception as e_drag:
+            logger.exception(f"MOUSE_MOVE_EVENT: Error during drag.exec_(): {e_drag}")
+
+        self._drag_start_position = None
 
     def remove_item(self):
         self.parent().remove_item(self.trace, self)
