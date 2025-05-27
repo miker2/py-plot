@@ -195,13 +195,13 @@ class CustomPlotItem(QLabel):
                 logger.warning("MOUSE_MOVE_EVENT: _subplot_widget or its objectName not set.")
                 mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray())
         except Exception as e_setSourceWidget:
-            logger.error(f"MOUSE_MOVE_EVENT: Exception during setData for sourcewidget: {e_setSourceWidget}")
+            logger.exception(f"MOUSE_MOVE_EVENT: Exception during setData for sourcewidget: {e_setSourceWidget}")
 
 
         try:
             mime_data.setData("application/x-customplotitem", QByteArray()) # The marker
         except Exception as e_setCustomPlotItem:
-            logger.error(f"MOUSE_MOVE_EVENT: Exception during setData for application/x-customplotitem: {e_setCustomPlotItem}")
+            logger.exception(f"MOUSE_MOVE_EVENT: Exception during setData for application/x-customplotitem: {e_setCustomPlotItem}")
 
         drag.setMimeData(mime_data)
 
@@ -211,13 +211,13 @@ class CustomPlotItem(QLabel):
             drag.setPixmap(pixmap)
             drag.setHotSpot(event.pos() - self.rect().topLeft())
         except Exception as e_pixmap:
-            logger.error(f"MOUSE_MOVE_EVENT: Exception during pixmap creation/setting: {e_pixmap}")
+            logger.exception(f"MOUSE_MOVE_EVENT: Exception during pixmap creation/setting: {e_pixmap}")
             # If self.render() or self.size() somehow trigger the pickle error via self.source
 
         try:
             drag.exec_(Qt.MoveAction)
         except Exception as e_drag:
-            logger.error(f"MOUSE_MOVE_EVENT: Error during drag.exec_(): {e_drag}")
+            logger.exception(f"MOUSE_MOVE_EVENT: Error during drag.exec_(): {e_drag}")
 
         self._drag_start_position = None
 
