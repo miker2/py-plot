@@ -73,8 +73,6 @@ class SubPlotWidget(QWidget):
         self.cursor = pg.InfiniteLine(pos=0, movable=False, pen='r')
         self.pw.addItem(self.cursor)
 
-        self.cidx = 0
-
         self._traces: List[CustomPlotItem] = []
 
         # We can just override the menu of the ViewBox here but I think a better solution
@@ -134,6 +132,10 @@ class SubPlotWidget(QWidget):
         menu.addAction(ss_plot_action)
 
         return menu
+
+    @property
+    def _cidx(self):
+        return len(self._traces)
 
     def dragEnterEvent(self, e):
         logger.debug("dragEnterEvent called.")
@@ -402,8 +404,7 @@ class SubPlotWidget(QWidget):
 
                 self.update_plot_yrange()
                 self._update_all_trace_colors()
-                self.cidx = len(self._traces) # Update cidx after all list modifications
-                logger.debug(f"DROP: Plot y-range and colors updated for '{self.objectName()}'. cidx: {self.cidx}")
+                logger.debug(f"DROP: Plot y-range and colors updated for '{self.objectName()}'. cidx: {self._cidx}")
 
                 e.acceptProposedAction()
                 logger.debug(f"DROP: Move-in for '{plot_name}' completed and event accepted.")
@@ -492,7 +493,7 @@ class SubPlotWidget(QWidget):
 
         item = self.pw.getPlotItem().plot(x=source.time,
                                           y=y_data,
-                                          pen=pg.mkPen(color=self._get_color(self.cidx),
+                                          pen=pg.mkPen(color=self._get_color(self._cidx),
                                                        width=CustomPlotItem.PEN_WIDTH),
                                           name=name,
                                           # clipToView=True,
@@ -520,13 +521,11 @@ class SubPlotWidget(QWidget):
         else:
             logger.info(f"Source object {type(source).__name__} does not have an onClose signal. Signal removal might not be tied to source closure for this item: {name}")
 
-        # self.cidx += 1 # cidx will be updated based on len(_traces)
         # self.update_plot_yrange() will be called by _update_all_trace_colors if needed,
         # or can be called separately. For now, let _update_all_trace_colors handle colors.
         # The original plot_data_from_source call to self.update_plot_yrange() is kept.
         self.update_plot_yrange()
         self._update_all_trace_colors() # Ensure all colors are correct after adding a new trace
-        self.cidx = len(self._traces) # Update cidx based on the actual number of traces
 
     def remove_item(self, trace, label, is_move_operation=False):
         # trace: the pyqtgraph.PlotDataItem
@@ -574,9 +573,8 @@ class SubPlotWidget(QWidget):
             label.hide()
 
 
-        # Update colors and cidx (if still used) in this subplot
+        # Update colors in this subplot
         self._update_all_trace_colors()
-        self.cidx = len(self._traces) # Update count
         logger.debug(f"remove_item completed for '{label.text()}' in {self.objectName()}. _traces count: {len(self._traces)}")
 
     def clear_plot(self):
@@ -591,8 +589,6 @@ class SubPlotWidget(QWidget):
         while self._labels.count() > 0:
             lbl = self._labels.takeAt(0).widget()
             lbl.close()
-
-        self.cidx = 0
 
     def update_plot_yrange(self, val=None):
         self.pw.autoRange()
