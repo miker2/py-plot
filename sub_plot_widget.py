@@ -314,55 +314,22 @@ class SubPlotWidget(QWidget):
                 # Adjust new_idx if original_idx was before it, due to the pop operation
                 if new_idx > original_idx:
                     new_idx -= 1
-                # FlowLayout does not have insertWidget. Need to rebuild.
 
-                # Store all label widgets, remove the dragged one from list
-                all_labels = []
-                dragged_label_for_reinsert = None
+                # Find and remove the label widget from the layout
+                # Since dragged_item_widget is in _traces, it must be in the layout
                 for i in range(self._labels.count()):
-                    lbl_widget = self._labels.itemAt(i).widget()
-                    if lbl_widget == dragged_item_widget: # CustomPlotItem is a QLabel
-                         dragged_label_for_reinsert = self._labels.takeAt(i).widget() # Take it
-                         break # Found and took the one we need to re-insert
-
-                # If not found by object equality, try by name (less robust)
-                if dragged_label_for_reinsert is None:
-                    for i in range(self._labels.count()):
-                        lbl_widget = self._labels.itemAt(i).widget()
-                        if lbl_widget.name == plot_name : # CustomPlotItem.name
-                            dragged_label_for_reinsert = self._labels.takeAt(i).widget()
-                            break
-
-                if dragged_label_for_reinsert is None:
-                    logger.error(f"Could not find label widget for '{plot_name}' to reorder.")
-                    # We already modified self._traces, this state is inconsistent.
-                    # This path should ideally not be reached if dragged_item_widget was found.
-                    # For safety, restore _traces and ignore drop event.
+                    if self._labels.itemAt(i).widget() == dragged_item_widget:
+                        dragged_label_for_reinsert = self._labels.takeAt(i).widget()
+                        break
+                else:
+                    # This should never happen if _traces and _labels are kept in sync
+                    logger.error(f"Label widget for '{plot_name}' not found in layout despite being in _traces.")
                     self._traces.insert(original_idx, dragged_item_widget)
                     e.ignore()
                     return
 
-                # Clear remaining items from _labels and store them
-                remaining_labels = []
-                while self._labels.count() > 0:
-                    remaining_labels.append(self._labels.takeAt(0).widget())
-
-                # Reconstruct the list of labels in the new order
-                # new_idx here is relative to the list *after* removing the item.
-                # If new_idx was for appending, it should be len(remaining_labels)
-                # For now, let's use the placeholder new_idx for _traces logic,
-                # and for labels, we insert at the same conceptual index.
-                # This new_idx is for self._traces, which now has one less item.
-                # So, if new_idx was len(self._traces) (before pop), it's now len(self._traces)-1 (after pop)
-                # Example: [a,b,c,d], pop b (idx 1). traces = [a,c,d]. new_idx=3 (append).
-                # labels: [L_a, L_c, L_d]. Insert L_b at new_idx=3. -> [L_a, L_c, L_d, L_b]
-
-                final_label_order = remaining_labels
-                final_label_order.insert(new_idx, dragged_label_for_reinsert)
-
-                # Re-populate _labels
-                for lbl_widget in final_label_order:
-                    self._labels.addWidget(lbl_widget)
+                # Insert the label widget at the new position
+                self._labels.insertWidget(new_idx, dragged_label_for_reinsert)
 
                 # Insert into _traces at new_idx
                 self._traces.insert(new_idx, dragged_item_widget)
