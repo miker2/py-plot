@@ -250,9 +250,7 @@ class SubPlotWidget(QWidget):
         self._drop_indicator.hide() # Hide indicator on drop
         if e.mimeData().hasFormat("application/x-customplotitem"):
             plot_name = e.mimeData().text() # Still useful for getting the trace name
-            # source_data_bytes for "application/x-customplotitem-source" is no longer sent or used.
-            source_widget_name_bytes = e.mimeData().data("application/x-customplotitem-sourcewidget")
-            source_widget_name_from_mime = source_widget_name_bytes.data().decode()
+
             # The 'source_object' (original data source like VarListWidget) will be retrieved differently
             # for move-in operations, directly from the dragged CustomPlotItem.
 
