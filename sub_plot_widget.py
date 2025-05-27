@@ -433,7 +433,7 @@ class SubPlotWidget(QWidget):
                 logger.debug("Returned from plot_data_from_source successfully")
                 e.accept()
             except Exception as ex_plot:
-                logger.error(f"Exception during plot_data_from_source or accept: {ex_plot}")
+                logger.exception(f"Exception during plot_data_from_source or accept: {ex_plot}")
                 e.ignore() # Ensure event is ignored on error
         else:
             e.ignore()
