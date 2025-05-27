@@ -416,7 +416,7 @@ class SubPlotWidget(QWidget):
                 selected = pickle.loads(bstream)
                 logger.debug(f"Unpickled 'selected': {selected}, var_name: {getattr(selected, 'var_name', 'N/A')}")
             except Exception as ex:
-                logger.error(f"Error unpickling DataItem: {ex}")
+                logger.exception(f"Error unpickling DataItem: {ex}")
                 e.ignore()
                 return
 
