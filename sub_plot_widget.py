@@ -263,24 +263,10 @@ class SubPlotWidget(QWidget):
                     logger.error("Dragged CustomPlotItem's _subplot_widget is None.")
                     e.ignore()
                     return
-                # Sanity check if objectName from mime matches the direct reference
-                if actual_source_widget.objectName() != source_widget_name_from_mime:
-                    logger.warning(f"Mismatch between e.source()._subplot_widget.objectName() ('{actual_source_widget.objectName()}') and MIME source widget name ('{source_widget_name_from_mime}'). Prioritizing e.source()._subplot_widget.")
-
-            else: # Fallback to lookup by name if e.source() is not CustomPlotItem (should not happen)
-                logger.warning("e.source() is not a CustomPlotItem. Falling back to objectName lookup for source widget.")
-                if source_widget_name_from_mime == self.objectName():
-                    actual_source_widget = self
-                elif hasattr(self.parent(), 'plot_area'): # Assumes PlotAreaWidget is parent
-                    for i in range(self.parent().plot_area.count()):
-                        widget = self.parent().plot_area.itemAt(i).widget()
-                        if isinstance(widget, SubPlotWidget) and widget.objectName() == source_widget_name_from_mime:
-                            actual_source_widget = widget
-                            break
-                if actual_source_widget is None:
-                    logger.error(f"Fallback Error: Could not find source widget by name: {source_widget_name_from_mime}")
-                    e.ignore()
-                    return
+            else:
+                logger.error("e.source() is not a CustomPlotItem. Cannot determine source widget.")
+                e.ignore()
+                return
 
             # Determine insertion index based on drop location
             idx_for_insertion: int
