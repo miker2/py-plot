@@ -1,11 +1,19 @@
 {
-  "geom_name":{
-    "type": "sphere",
-    "data": {
-      "color": [0.3, 0.3, 0.3, 1],
-      "radius": 0.05,
-      "pos_pattern": "var_name.{}",
-      "pos_names": ["x", "y", "z"]
+  "sources": [
+    {
+      "name": "mujoco_sim.csv",
+      "geometry": {
+        "geom_name":{
+        "type": "sphere",
+        "data": {
+          "color": [0.3, 0.3, 0.3, 1],
+          "radius": 0.05,
+          "pos_pattern": "var_name.{}",
+          "pos_names": ["x", "y", "z"]
+        }
+        }
+      }
     }
-  }
+  ]
 }
+
