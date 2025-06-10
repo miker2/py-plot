@@ -177,7 +177,7 @@ class CustomPlotItem(QLabel):
             # Call super for other mouse move events if necessary, or just return
             super().mouseMoveEvent(event)
             return
-        
+
         # Check if drag_start_position is initialized and valid
         if not hasattr(self, 'drag_start_position') or self.drag_start_position is None or self.drag_start_position.isNull():
             super().mouseMoveEvent(event)
@@ -191,21 +191,21 @@ class CustomPlotItem(QLabel):
         # logger.info(f"CustomPlotItem '{self.name}': Initiating QDrag.")
         drag = QDrag(self)
         mime_data = QMimeData()
-        
+
         # Set text for general purpose (e.g., if dropped on a text editor or for SubPlotWidget's text() check)
         mime_data.setText(self.trace.name())
-        
+
         # Set specific data for "application/x-customplotitem" format
         # This is what SubPlotWidget's dropEvent will primarily check via hasFormat and then use text().
         # Encoding the trace name as QByteArray for setData.
         mime_data.setData("application/x-customplotitem", self.trace.name().encode())
-        
+
         # It seems SubPlotWidget.dropEvent for CustomPlotItem reordering/moving
         # also uses e.mimeData().data("application/x-customplotitem-sourcewidget")
         # to get the source widget's object name. This should be preserved if still used.
         # The existing code already has this:
         if self._subplot_widget and self._subplot_widget.objectName():
-            mime_data.setData("application/x-customplotitem-sourcewidget", 
+            mime_data.setData("application/x-customplotitem-sourcewidget",
                               QByteArray(self._subplot_widget.objectName().encode()))
         else:
             # logger.warning("CustomPlotItem.mouseMoveEvent: _subplot_widget or its objectName not set.")
@@ -213,20 +213,20 @@ class CustomPlotItem(QLabel):
 
 
         drag.setMimeData(mime_data)
-        
+
         # Visual feedback for the drag
         try:
             pixmap = self.grab() # Grab the current appearance of the label
             drag.setPixmap(pixmap)
             # Set the hot spot to be where the mouse click started within the label
-            drag.setHotSpot(event.pos() - self.rect().topLeft()) 
+            drag.setHotSpot(event.pos() - self.rect().topLeft())
         except Exception as e_pixmap:
             logger.exception(f"CustomPlotItem.mouseMoveEvent: Exception during pixmap creation/setting: {e_pixmap}")
 
         # logger.info(f"CustomPlotItem '{self.name}': Executing drag.")
         drag.exec_(Qt.MoveAction)
         # logger.info(f"CustomPlotItem '{self.name}': Drag finished.")
-        
+
         # Reset drag_start_position after drag finishes, though it might be good practice
         # to reset it in mouseReleaseEvent as well, or if the drag is cancelled.
         # For now, this matches the original logic of setting it to None.

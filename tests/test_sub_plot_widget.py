@@ -110,7 +110,7 @@ class MockDraggableVarItem(QWidget):
         drag = QDrag(self)
         mime_data = create_data_item_mime_data(self.data_source_name)
         drag.setMimeData(mime_data)
-        
+
         # The exec_() call will block until the drag is completed.
         # For testing with qtbot, this is generally fine as qtbot manages the event loop.
         drag.exec_(Qt.MoveAction)
@@ -194,7 +194,7 @@ def _assert_trace_order_and_colors(subplot_widget: SubPlotWidget, expected_trace
     """
     assert len(subplot_widget._traces) == len(expected_trace_names), \
         f"Expected {len(expected_trace_names)} traces, got {len(subplot_widget._traces)}"
-    
+
     actual_trace_names = [t.trace.name() for t in subplot_widget._traces]
     assert actual_trace_names == expected_trace_names, \
         f"Trace name order mismatch. Expected {expected_trace_names}, got {actual_trace_names}"
@@ -215,7 +215,7 @@ def _assert_trace_order_and_colors(subplot_widget: SubPlotWidget, expected_trace
         assert custom_plot_item.trace.opts['pen'].color().name() == expected_color_name, \
             f"PlotDataItem pen color for trace '{trace_name}' (index {i}) incorrect. Expected {expected_color_name}, " \
             f"got {custom_plot_item.trace.opts['pen'].color().name()}"
-        
+
         # Verify label order in FlowLayout
         label_in_layout = subplot_widget._labels.itemAt(i).widget()
         assert isinstance(label_in_layout, CustomPlotItem)
@@ -468,13 +468,13 @@ def test_drag_data_item_to_subplot(subplot_widget_setup, qtbot, mocker): # Added
     trace_name = "temperature_sensor"
     time_data = np.array([0.0, 0.1, 0.2, 0.3, 0.4])
     y_data = np.array([20.0, 20.5, 21.0, 20.8, 21.2])
-    
+
     source_model = MockDataSource(time_data, {trace_name: y_data}, var_name=trace_name)
     draggable_item = MockDraggableVarItem(data_source_name=trace_name, mock_data_model=source_model)
 
     qtbot.addWidget(subplot_widget)
     qtbot.addWidget(draggable_item)
-    
+
     # Ensure widgets are visible and have a size for event processing
     subplot_widget.show()
     subplot_widget.resize(300, 200)
@@ -492,7 +492,7 @@ def test_drag_data_item_to_subplot(subplot_widget_setup, qtbot, mocker): # Added
     # mouseMove on draggable_item is needed to start the drag.
     # The subsequent mouseMove to subplot_widget and mouseRelease on subplot_widget
     # will be processed by the Qt event loop during drag.exec_().
-    
+
     # The QDrag object is created in draggable_item.mouseMoveEvent.
     # qtbot.mouseMove alone won't complete the drag if QDrag.exec_ is blocking.
     # However, pytest-qt's event loop processing should handle this.
@@ -501,7 +501,7 @@ def test_drag_data_item_to_subplot(subplot_widget_setup, qtbot, mocker): # Added
 
     # Point for drag initiation on draggable_item
     drag_start_point_local = QPoint(draggable_item.width()//2, draggable_item.height()//2)
-    
+
     # Point for drop on subplot_widget (local coordinates)
     drop_point_on_subplot_local = QPoint(subplot_widget.width()//2, subplot_widget.height()//2)
 
@@ -517,12 +517,12 @@ def test_drag_data_item_to_subplot(subplot_widget_setup, qtbot, mocker): # Added
     # The drag.exec_() handles the interaction. We just need to ensure it's triggered.
     # For testing, the target of the drop is implicitly handled by Qt's DND system
     # once drag.exec_() starts. We need to ensure our subplot_widget is a valid drop target.
-    
+
     # To ensure the drag is initiated and processed, we can use qtbot.dnd.
     # However, the subtask asks to use mousePress/Move/Release.
     # The tricky part is that drag.exec_() is blocking.
     # pytest-qt normally handles this by processing events.
-    
+
     # Let's try a direct simulation sequence:
     # 1. Press on draggable_item
     # 2. Move on draggable_item (to start QDrag.exec_())
@@ -536,7 +536,7 @@ def test_drag_data_item_to_subplot(subplot_widget_setup, qtbot, mocker): # Added
     # We don't explicitly call `qtbot.mouseMove(subplot_widget, ...)` or
     # `qtbot.mouseRelease(subplot_widget, ...)` because these would occur *after*
     # `exec_()` returns, but the drop happens *during* `exec_()`.
-    
+
     # We need to ensure that the drag operation (started by mouseMove on draggable_item)
     # actually targets the subplot_widget. This usually happens because the mouse cursor
     # physically moves over the subplot_widget during the drag.
@@ -548,26 +548,26 @@ def test_drag_data_item_to_subplot(subplot_widget_setup, qtbot, mocker): # Added
     # Given the constraint of using mousePress/Move/Release, we rely on the fact
     # that `draggable_item.mouseMoveEvent` calls `drag.exec_()`.
     # The `SubPlotWidget` should then receive the drop if its `dragEnterEvent` accepts.
-    
+
     # We will mock QDrag.exec_ to simulate the drop on the target widget.
     # This is because qtbot.mouseMove/Release after initiating QDrag won't work as expected
     # due to QDrag.exec_()'s blocking nature and its own event loop.
-    
+
     def mock_drag_exec(drag_instance, action): # drag_instance is the QDrag object
         # Simulate that the drag moved over subplot_widget and was dropped
         # This bypasses the need for actual mouse cursor simulation over widgets
         # We assume the drag would have reached the subplot_widget
-        
+
         # Manually create and dispatch drag enter, move, and drop events to subplot_widget
         # This is what QDrag would do internally if mouse was moved over subplot_widget
-        
+
         # 1. Simulate Drag Enter on subplot_widget
         # Map a point from draggable_item to global, then to subplot_widget
         # For simplicity, let's use a fixed point on subplot_widget
         enter_pos_subplot = QPoint(10,10) # Local to subplot_widget
         drag_enter_event = QDragEnterEvent(enter_pos_subplot, drag_instance.supportedActions(), drag_instance.mimeData(), event.buttons(), event.modifiers())
         QApplication.sendEvent(subplot_widget, drag_enter_event) # Dispatch event
-        
+
         if drag_enter_event.isAccepted():
             # 2. Simulate Drag Move on subplot_widget (optional if enter is enough for accept)
             move_pos_subplot = QPoint(15,15)
@@ -587,7 +587,7 @@ def test_drag_data_item_to_subplot(subplot_widget_setup, qtbot, mocker): # Added
 
     # This mouseMove should trigger draggable_item.mouseMoveEvent, which starts QDrag
     qtbot.mouseMove(draggable_item, QPoint(drag_start_point_local.x() + QApplication.startDragDistance() + 5, drag_start_point_local.y()))
-    
+
     # No explicit mouseRelease needed on subplot_widget if QDrag.exec_ is handling it.
     # The mock_drag_exec simulates the drop.
 
@@ -633,7 +633,7 @@ def test_reorder_custom_plot_item_same_subplot(subplot_widget_setup, qtbot, mock
     }
     added_items = _add_traces_to_subplot(subplot_widget, traces_to_add, common_time_data)
     _assert_trace_order_and_colors(subplot_widget, ["TraceA", "TraceB", "TraceC"]) # Initial state
-    
+
     label_to_drag = added_items["TraceA"]
     assert label_to_drag._subplot_widget == subplot_widget
 
@@ -673,7 +673,7 @@ def test_reorder_custom_plot_item_same_subplot(subplot_widget_setup, qtbot, mock
         mocker.patch.object(move_event, 'source', return_value=drag_instance.source(), create=True)
         QApplication.sendEvent(subplot_widget, move_event)
         if not move_event.isAccepted(): return Qt.IgnoreAction
-        
+
         # Simulate DropEvent
         drop_event = QDropEvent(
             drop_point_on_subplot, supported_actions, drag_instance.mimeData(),
@@ -682,7 +682,7 @@ def test_reorder_custom_plot_item_same_subplot(subplot_widget_setup, qtbot, mock
         mocker.patch.object(drop_event, 'source', return_value=drag_instance.source(), create=True)
         drop_event.setDropAction(Qt.MoveAction)
         QApplication.sendEvent(subplot_widget, drop_event)
-        
+
         return Qt.MoveAction if drop_event.isAccepted() else Qt.IgnoreAction
 
     mocker.patch('PyQt5.QtGui.QDrag.exec_', side_effect=mock_drag_exec_for_reorder)
@@ -695,11 +695,11 @@ def test_reorder_custom_plot_item_same_subplot(subplot_widget_setup, qtbot, mock
 
     press_pos = QPoint(label_to_drag.width() // 4, label_to_drag.height() // 4)
     # Ensure move is sufficient to trigger drag
-    move_offset = QPoint(QApplication.startDragDistance() + 5, 0) 
+    move_offset = QPoint(QApplication.startDragDistance() + 5, 0)
     move_pos = press_pos + move_offset
 
     qtbot.mousePress(label_to_drag, Qt.LeftButton, pos=press_pos)
-    qtbot.mouseMove(label_to_drag, pos=move_pos) 
+    qtbot.mouseMove(label_to_drag, pos=move_pos)
     # mouseMove on label_to_drag triggers its mouseMoveEvent, which calls the mocked QDrag.exec_
 
     # 4. Verification
@@ -730,7 +730,7 @@ def test_move_custom_plot_item_between_subplots(qtbot, mocker): # Removed qapp, 
         trace_name = "MovableTrace"
         time_data = np.array([0.0, 0.1, 0.2])
         y_data = np.array([10, 20, 30])
-        
+
         # Use _add_traces_to_subplot for consistency, even for one trace
         added_to_source = _add_traces_to_subplot(source_subplot, {trace_name: (time_data, y_data)})
         label_to_drag = added_to_source[trace_name]
@@ -740,16 +740,16 @@ def test_move_custom_plot_item_between_subplots(qtbot, mocker): # Removed qapp, 
         assert source_subplot._traces[0].trace.name() == trace_name
         assert len(target_subplot._traces) == 0
         assert label_to_drag._subplot_widget == source_subplot
-        
+
         # 2. Mocking and Spies
         mocker.patch.object(target_subplot, '_get_drop_index', return_value=0)
-        
+
         spy_disconnect = mocker.spy(source_subplot.parent().plot_manager().timeValueChanged, 'disconnect')
         spy_connect = mocker.spy(target_subplot.parent().plot_manager().timeValueChanged, 'connect')
 
         def mock_drag_exec_for_move(drag_instance, supported_actions, default_action=None): # defaultAction can be Qt.IgnoreAction
             QApplication.processEvents() # Ensure target_subplot geometry is up-to-date
-            
+
             # Drop point in target_subplot's label area (flow_layout_widget)
             drop_y_in_labels_target = target_subplot.flow_layout_widget.height() // 2 if target_subplot.flow_layout_widget.height() > 0 else 10
             drop_point_on_target = QPoint(10, drop_y_in_labels_target)
@@ -765,13 +765,13 @@ def test_move_custom_plot_item_between_subplots(qtbot, mocker): # Removed qapp, 
             mocker.patch.object(move_event, 'source', return_value=drag_instance.source(), create=True)
             QApplication.sendEvent(target_subplot, move_event)
             if not move_event.isAccepted(): return Qt.IgnoreAction
-            
+
             # Simulate DropEvent on target_subplot
             drop_event = QDropEvent(drop_point_on_target, supported_actions, drag_instance.mimeData(), Qt.LeftButton, Qt.NoModifier, QEvent.Drop)
             mocker.patch.object(drop_event, 'source', return_value=drag_instance.source(), create=True)
             drop_event.setDropAction(Qt.MoveAction) # Assume MoveAction for this test
             QApplication.sendEvent(target_subplot, drop_event)
-            
+
             return Qt.MoveAction if drop_event.isAccepted() else Qt.IgnoreAction
 
         mocker.patch('PyQt5.QtGui.QDrag.exec_', side_effect=mock_drag_exec_for_move)
@@ -784,7 +784,7 @@ def test_move_custom_plot_item_between_subplots(qtbot, mocker): # Removed qapp, 
         press_pos = QPoint(label_to_drag.width() // 4, label_to_drag.height() // 4)
         move_offset = QPoint(QApplication.startDragDistance() + 5, 0)
         move_pos = press_pos + move_offset
-        
+
         qtbot.mousePress(label_to_drag, Qt.LeftButton, pos=press_pos)
         qtbot.mouseMove(label_to_drag, pos=move_pos)
 
@@ -797,7 +797,7 @@ def test_move_custom_plot_item_between_subplots(qtbot, mocker): # Removed qapp, 
         assert len(target_subplot._traces) == 1, "Target subplot should have one trace after move"
         assert target_subplot._traces[0] == label_to_drag, "Moved trace instance should be in target's _traces"
         assert label_to_drag._subplot_widget == target_subplot, "Moved trace's _subplot_widget should point to target"
-        
+
         assert target_subplot._labels.count() == 1, "Target subplot should have one label in layout"
         assert target_subplot._labels.itemAt(0).widget() == label_to_drag, "Moved label should be in target's layout"
 
@@ -837,20 +837,20 @@ def test_drag_custom_plot_item_to_plot_area_appends(subplot_widget_setup, mocker
 
     # 2. Simulate Drag and Drop to Plot Area
     mime_data = create_custom_plot_item_mime_data(dragged_label.trace.name())
-    
+
     # Ensure widget has processed initial layout to get valid geometries for pw and flow_layout_widget
     # This is important for the e.pos().y() >= self.flow_layout_widget.geometry().bottom() check in dropEvent.
     if subplot_widget.parentWidget():
         subplot_widget.parentWidget().resize(600, 400) # Give parent area some size
     subplot_widget.resize(600,300) # Give subplot some size so children get geometry
     QApplication.processEvents() # Allow Qt to process layout changes
-        
+
     # Define drop position within the plot widget (pw) area.
     # This position must be below the flow_layout_widget to trigger append logic.
     # Using the center of the plot widget (pw) should generally satisfy this.
-    drop_pos_plot_area = QPoint(subplot_widget.pw.width() // 2, 
+    drop_pos_plot_area = QPoint(subplot_widget.pw.width() // 2,
                                 subplot_widget.pw.geometry().top() + subplot_widget.pw.height() // 2)
-    
+
     # Verification that the chosen drop point is indeed in the "plot area"
     # (i.e., below the label area / flow_layout_widget)
     if subplot_widget.flow_layout_widget.geometry().bottom() > drop_pos_plot_area.y():
@@ -880,7 +880,7 @@ def test_drag_custom_plot_item_to_plot_area_appends(subplot_widget_setup, mocker
     # Drop Event
     drop_event = create_mock_drop_event(mime_data, drop_pos_plot_area, source_widget=dragged_label, proposed_action=Qt.MoveAction)
     mocker.patch.object(drop_event, 'source', return_value=dragged_label) # Critical mock
-    
+
     subplot_widget.dropEvent(drop_event)
     assert drop_event.isAccepted(), "dropEvent should be accepted for append logic"
 
@@ -901,9 +901,9 @@ def test_drag_custom_plot_item_to_plot_area_appends(subplot_widget_setup, qtbot,
     }
     added_items = _add_traces_to_subplot(subplot_widget, traces_to_add, common_time_data)
     _assert_trace_order_and_colors(subplot_widget, ["TraceX", "TraceY", "TraceZ"]) # Initial state
-    
+
     label_to_drag = added_items["TraceX"]
-    
+
     qtbot.addWidget(subplot_widget)
     subplot_widget.show()
     qtbot.waitExposed(subplot_widget)
@@ -912,7 +912,7 @@ def test_drag_custom_plot_item_to_plot_area_appends(subplot_widget_setup, qtbot,
     # 2. Mocking Strategy (Do NOT mock _get_drop_index)
     def mock_drag_exec_for_append(drag_instance, supported_actions, default_action=None):
         QApplication.processEvents() # Ensure subplot_widget's geometry is updated.
-        
+
         # Drop position must be in the plot area (pw), relative to subplot_widget
         plot_area_center_in_pw = subplot_widget.pw.rect().center()
         drop_point_in_plot_area = subplot_widget.pw.mapToParent(plot_area_center_in_pw)
@@ -938,13 +938,13 @@ def test_drag_custom_plot_item_to_plot_area_appends(subplot_widget_setup, qtbot,
         QApplication.sendEvent(subplot_widget, move_event)
         spy_hide_indicator.assert_called_once() # Check indicator is hidden
         if not move_event.isAccepted(): return Qt.IgnoreAction
-        
+
         # Simulate DropEvent
         drop_event = QDropEvent(drop_point_in_plot_area, supported_actions, drag_instance.mimeData(), Qt.LeftButton, Qt.NoModifier, QEvent.Drop)
         mocker.patch.object(drop_event, 'source', return_value=drag_instance.source(), create=True)
         drop_event.setDropAction(Qt.MoveAction)
         QApplication.sendEvent(subplot_widget, drop_event)
-            
+
         return Qt.MoveAction if drop_event.isAccepted() else Qt.IgnoreAction
 
     mocker.patch('PyQt5.QtGui.QDrag.exec_', side_effect=mock_drag_exec_for_append)
@@ -974,7 +974,7 @@ def test_drag_unrecognized_mime_type_is_ignored(subplot_widget_setup, qtbot, moc
     initial_trace_name = "InitialTrace"
     # Use _add_traces_to_subplot for consistency, even for one trace
     _add_traces_to_subplot(subplot_widget, {initial_trace_name: np.array([1,2])}, common_time_data=np.array([0.0, 0.1]))
-    
+
     unrecognized_item = MockDraggableUnrecognizedItem()
 
     qtbot.addWidget(subplot_widget)
@@ -987,13 +987,13 @@ def test_drag_unrecognized_mime_type_is_ignored(subplot_widget_setup, qtbot, moc
 
     # 2. Mocking Strategy for QDrag.exec_
     # This flag will be set if the mock function is actually called.
-    mock_drag_exec_called = False 
+    mock_drag_exec_called = False
 
     def mock_drag_exec_for_unrecognized(drag_instance, supported_actions, default_action=None):
         nonlocal mock_drag_exec_called
         mock_drag_exec_called = True
-        
-        QApplication.processEvents() 
+
+        QApplication.processEvents()
         target_point = subplot_widget.rect().center()
 
         # Simulate DragEnter
@@ -1014,8 +1014,8 @@ def test_drag_unrecognized_mime_type_is_ignored(subplot_widget_setup, qtbot, moc
         drop_event.setDropAction(Qt.MoveAction)
         QApplication.sendEvent(subplot_widget, drop_event)
         assert not drop_event.isAccepted(), "dropEvent should have ignored unrecognized mime type"
-            
-        return Qt.IgnoreAction 
+
+        return Qt.IgnoreAction
 
     mocker.patch('PyQt5.QtGui.QDrag.exec_', side_effect=mock_drag_exec_for_unrecognized)
 
@@ -1025,7 +1025,7 @@ def test_drag_unrecognized_mime_type_is_ignored(subplot_widget_setup, qtbot, moc
 
     qtbot.mousePress(unrecognized_item, Qt.LeftButton, pos=press_pos)
     qtbot.mouseMove(unrecognized_item, pos=move_pos)
-    
+
     assert mock_drag_exec_called, "Mocked QDrag.exec_ was not called, drag initiation failed."
 
     # 4. Verification (in main test body)
