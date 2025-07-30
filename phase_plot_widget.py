@@ -47,44 +47,44 @@ import numpy as np
 
 class PhasePlotCustomItem(CustomPlotItem):
     """Customized version of CustomPlotItem for phase plots"""
-    
+
     def __init__(self, parent, phase_plot_item):
         self.phase_plot_item = phase_plot_item
-        
+
         # Create a mock trace object that CustomPlotItem expects
         # We'll override the methods that need different behavior
         mock_plot_data_item = phase_plot_item.get_qt_item()
         mock_source = None  # We'll handle sources differently
         current_tick = 0    # Phase plots don't use time ticks
-        
+
         super().__init__(parent, mock_plot_data_item, mock_source, current_tick)
-    
+
     def _generate_label(self):
         """Override to show phase plot format with file prefixes: 'x: F#:var_name_x - y: F#:var_name_y'"""
         # Get source info from the phase plot item
         source_x = self.phase_plot_item.source_x
         source_y = self.phase_plot_item.source_y
-        
+
         # Create prefixes for X and Y variables
         x_prefix = ""
         y_prefix = ""
-        
+
         if hasattr(source_x, 'idx') and source_x.idx is not None:
             x_prefix = f"F{source_x.idx}:"
         if hasattr(source_y, 'idx') and source_y.idx is not None:
             y_prefix = f"F{source_y.idx}:"
-        
+
         return f"x: {x_prefix}{self.phase_plot_item.var_name_x} - y: {y_prefix}{self.phase_plot_item.var_name_y}"
-    
+
     def on_time_changed(self, time):
         """Override to disable time-based updates for phase plots"""
         # Phase plots don't show current values, so we don't update
         pass
-    
+
     def remove_item(self):
         """Override to call phase plot's remove method"""
         self.parent().remove_trace(self.phase_plot_item)
-    
+
     def toggle_trace(self, is_checked):
         """Override to work with phase plot items"""
         if is_checked:
@@ -93,9 +93,19 @@ class PhasePlotCustomItem(CustomPlotItem):
         else:
             # Show the trace
             self.phase_plot_item.get_qt_item().show()
-        
+
         # Update label appearance (call parent method for consistent styling)
         super().toggle_trace(is_checked)
+
+    def update_color(self, color_str):
+        """Override to update both the phase plot item and the label"""
+        # Update the phase plot item's pen
+        pen = pg.mkPen(color=color_str, width=PEN_WIDTH)
+        self.phase_plot_item.pen = pen
+        self.phase_plot_item.get_qt_item().setPen(pen)
+
+        # Update the label appearance (call parent method)
+        super().update_color(color_str)
 
 class PhasePlotWidget(QWidget):
     # Use the exact same colors as SubPlotWidget for consistency
@@ -246,18 +256,18 @@ class PhasePlotWidget(QWidget):
         item = PhasePlotItem(source_x, var_name_x, source_y, var_name_y, pen, name=trace_name)
 
         self.plot_widget.getPlotItem().addItem(item.get_qt_item())
-        
+
         # Create the legend label (following SubPlotWidget pattern)
         label = PhasePlotCustomItem(self, item)
         self._traces.append(label)  # Store the legend item, like SubPlotWidget does
         self.legend_layout.addWidget(label)
-        
+
         # Connect to source onClose signals to automatically remove trace when files are closed
         if hasattr(source_x, 'onClose'):
             source_x.onClose.connect(lambda label=label: self.remove_trace(label.phase_plot_item))
         if hasattr(source_y, 'onClose') and source_y != source_x:
             source_y.onClose.connect(lambda label=label: self.remove_trace(label.phase_plot_item))
-        
+
         return item # Return the item in case the caller wants to interact with it
 
     def remove_trace(self, phase_plot_item_instance):
@@ -267,7 +277,7 @@ class PhasePlotWidget(QWidget):
             if label.phase_plot_item == phase_plot_item_instance:
                 label_to_remove = label
                 break
-        
+
         if label_to_remove:
             # Remove the plot item from the plot
             self.plot_widget.getPlotItem().removeItem(phase_plot_item_instance.get_qt_item())
@@ -276,6 +286,18 @@ class PhasePlotWidget(QWidget):
             label_to_remove.close()
             # Remove from our traces list
             self._traces.remove(label_to_remove)
+
+            # Decrement color index (same as SubPlotWidget)
+            self.cidx = max(0, self.cidx - 1)
+
+            # Recolor all remaining traces to maintain proper color sequence
+            for idx in range(self.legend_layout.count()):
+                widget_item = self.legend_layout.itemAt(idx)
+                if widget_item:
+                    label = widget_item.widget()
+                    if hasattr(label, 'update_color'):
+                        label.update_color(self._get_color(idx))
+
             # Update markers since trace was removed
             self.update_marker(self.last_tick_index)
 
@@ -286,7 +308,7 @@ class PhasePlotWidget(QWidget):
             # Remove the label from the layout and close it
             self.legend_layout.removeWidget(label)
             label.close()
-        
+
         self._traces = []
         self.cidx = 0 # Reset color index
 
@@ -471,7 +493,7 @@ class PhasePlotWidget(QWidget):
     def get_plot_widget(self):
         """Returns the internal pyqtgraph.PlotWidget instance."""
         return self.plot_widget
-    
+
     @staticmethod
     def _get_color(idx):
         """Get color by index, same as SubPlotWidget"""
