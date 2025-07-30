@@ -3,7 +3,7 @@
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QPoint
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QTabWidget, QMessageBox, \
     QCheckBox, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QLabel, QListWidget, \
-    QMenu, QAction, QApplication, QDialog
+    QMenu, QAction, QApplication, QDialog, QPushButton
 from filter_box_widget import FilterBoxWidget
 from var_list_widget import VarListWidget
 
@@ -224,6 +224,44 @@ def time_selector_dialog(caller, df):
     var_selector.addItems(df.columns)
     var_selector.setCurrentRow(0)
     form.addRow("Select time variable:", var_selector)
+
+    # Add scale factor option
+    scale_factor_input = QDoubleSpinBox()
+    scale_factor_input.setDecimals(12)  # Allow for very small numbers like 1e-9
+    scale_factor_input.setMinimum(1e-15)  # Support very small scale factors
+    scale_factor_input.setMaximum(1e15)   # Support very large scale factors
+    scale_factor_input.setValue(1.0)      # Default to no scaling
+    scale_factor_input.setToolTip("Scale factor to apply to the time variable (e.g., 1e-9 to convert nanoseconds to seconds)")
+    scale_factor_input.setSingleStep(0.1)
+
+    scale_hbox = QHBoxLayout()
+    scale_hbox.addWidget(scale_factor_input)
+    scale_hbox.addWidget(QLabel("(e.g., 1e-9 for ns→s)"))
+
+    # Add preset buttons for common scale factors
+    ns_to_s_btn = QPushButton("ns→s")
+    ns_to_s_btn.setToolTip("Set scale factor to 1e-9 (nanoseconds to seconds)")
+    ns_to_s_btn.clicked.connect(lambda: scale_factor_input.setValue(1e-9))
+
+    us_to_s_btn = QPushButton("μs→s")
+    us_to_s_btn.setToolTip("Set scale factor to 1e-6 (microseconds to seconds)")
+    us_to_s_btn.clicked.connect(lambda: scale_factor_input.setValue(1e-6))
+
+    ms_to_s_btn = QPushButton("ms→s")
+    ms_to_s_btn.setToolTip("Set scale factor to 1e-3 (milliseconds to seconds)")
+    ms_to_s_btn.clicked.connect(lambda: scale_factor_input.setValue(1e-3))
+
+    reset_btn = QPushButton("1.0")
+    reset_btn.setToolTip("Reset scale factor to 1.0 (no scaling)")
+    reset_btn.clicked.connect(lambda: scale_factor_input.setValue(1.0))
+
+    scale_hbox.addWidget(ns_to_s_btn)
+    scale_hbox.addWidget(us_to_s_btn)
+    scale_hbox.addWidget(ms_to_s_btn)
+    scale_hbox.addWidget(reset_btn)
+    scale_hbox.addStretch()
+    form.addRow("Scale factor:", scale_hbox)
+
     synthetic_time_tickbox = QCheckBox()
     synthetic_time_tickbox.setToolTip("Check this box if you want to create a synthetic time variable.")
     time_delta_input = QDoubleSpinBox()
@@ -250,19 +288,20 @@ def time_selector_dialog(caller, df):
 
     # Show the dialog as modal
     if dialog.exec() == QDialog.Accepted:
+        scale_factor = scale_factor_input.value()
         if synthetic_time_tickbox.isChecked():
             # User wants a synthetic time variable, so let's create one:
-            dt = time_delta_input.value()
+            dt = time_delta_input.value() * scale_factor  # Apply scale factor to synthetic time as well
             # We can safely call this variable "time" because if "time" already existed,
             # this dialog wouldn't appear.
             df['time'] = dt * np.array(range(df.shape[0]), dtype=np.float64)
             time = df['time']
         else:
             item = var_selector.currentItem().text()
-            time = df[item].astype(np.float64, copy=True)
+            time = df[item].astype(np.float64, copy=True) * scale_factor  # Apply scale factor
             if np.any(np.diff(time) < 0):
                 QMessageBox.warning(caller, "Non-monotonic time variable",
-                                    f"WARNING: Selected time variable '{item}' is not " +
+                                    f"WARNING: Selected time variable '{item}' (after scaling) is not " +
                                     "monotonically increasing!")
         return True, time
     else:
@@ -346,10 +385,10 @@ class ParquetLoader(FileLoader):
                 if ok:
                     self._time = time
                 else:
-                    QMessageBox.critical(caller, "Unable to load .parquet file. No time series selected. "
-                                                 "Unable to finish loading data.")
+                    QMessageBox.critical(caller, "Unable to load parquet file",
+                                                 "No time series selected. Unable to finish loading data.")
 
         except Exception as ex:
             # If we've gotten here, this likely isn't a parquet file.
             print(ex)
-            QMessageBox.critical(caller, f"Unable to load {filename}. Does not appear to be a valid parquet file.")
+            QMessageBox.critical(caller, "Unable to load parquet file", f"Unable to load {filename}. Does not appear to be a valid parquet file.")
