@@ -1,17 +1,18 @@
 from PyQt5.QtWidgets import QTabWidget, QInputDialog, QMenu, QAction
 from PyQt5.QtCore import Qt, QSettings # QSettings might not be directly used if DockedWidget handles it
 
-from gui.docked_widget import DockedWidget # Assuming gui.docked_widget path
-from gui.phase_plot_widget import PhasePlotWidget # Assuming gui.phase_plot_widget path
+from docked_widget import DockedWidget
+from phase_plot_widget import PhasePlotWidget
 
 class DockedPhasePlotWidget(DockedWidget):
     def __init__(self, parent, plot_manager_instance, data_file_widget_instance):
-        super().__init__("Phase Plots", parent)
-
         self.plot_manager = plot_manager_instance
         self.data_file_widget = data_file_widget_instance
 
         self.tabs = QTabWidget()
+
+        super().__init__("Phase Plots", parent)
+
         self.setWidget(self.tabs) # Sets the main widget for the DockedWidget
 
         self.tabs.setTabsClosable(True)
@@ -23,7 +24,7 @@ class DockedPhasePlotWidget(DockedWidget):
         self.tabs.tabBar().customContextMenuRequested.connect(self.on_tab_bar_context_menu)
         self.tabs.tabBar().setContextMenuPolicy(Qt.CustomContextMenu)
         self.tabs.tabBarDoubleClicked.connect(self.rename_tab_dialog)
-        
+
         # _read_settings is called by DockedWidget's constructor after this __init__
         # So, tab loading will happen there.
         # If _read_settings doesn't load any tabs, we add a default one.
@@ -54,14 +55,14 @@ class DockedPhasePlotWidget(DockedWidget):
 
 
         tab_name = name if name is not None else f"Phase Plot {self.tabs.count() + 1}"
-        
+
         index = self.tabs.addTab(new_phase_plot_widget, tab_name)
         self.tabs.setCurrentWidget(new_phase_plot_widget)
 
         if plot_config is not None:
             # PhasePlotWidget.load_plot_config now uses self.data_file_widget
             new_phase_plot_widget.load_plot_config(plot_config)
-        
+
         return new_phase_plot_widget
 
     def close_tab(self, index):
@@ -74,37 +75,37 @@ class DockedPhasePlotWidget(DockedWidget):
             elif hasattr(self.plot_manager, 'timeValueChanged'):
                  try: widget.update_marker.disconnect()
                  except TypeError: pass
-            
+
             self.tabs.removeTab(index)
             widget.deleteLater() # Important for cleanup
 
     def rename_tab_dialog(self, index):
         if index < 0 or index >= self.tabs.count(): # Check if index is valid
             # Double-clicking on empty tab bar area gives index -1 for some Qt versions
-            return 
+            return
 
         old_name = self.tabs.tabText(index)
         new_name, ok = QInputDialog.getText(self, "Rename Tab", "Enter new tab name:", text=old_name)
-        
+
         if ok and new_name:
             self.tabs.setTabText(index, new_name)
 
     def on_tab_bar_context_menu(self, point):
         menu = QMenu(self)
-        
+
         add_action = menu.addAction("Add New Phase Plot")
         add_action.triggered.connect(lambda: self.add_phase_plot_tab()) # Lambda to call without args
 
         tab_index = self.tabs.tabBar().tabAt(point)
         if tab_index != -1: # Check if the click was on an actual tab
             menu.addSeparator()
-            
+
             rename_action = menu.addAction("Rename Tab")
             rename_action.triggered.connect(lambda checked=False, idx=tab_index: self.rename_tab_dialog(idx))
 
             close_action = menu.addAction("Close Tab")
             close_action.triggered.connect(lambda checked=False, idx=tab_index: self.close_tab(idx))
-        
+
         menu.exec_(self.tabs.tabBar().mapToGlobal(point))
 
     def _write_settings(self):
@@ -139,14 +140,14 @@ class DockedPhasePlotWidget(DockedWidget):
             name = self.settings.value("name")
             plot_config = self.settings.value("plot_config")
             # Ensure plot_config is a list, QSettings might return single item if array had one element
-            if not isinstance(plot_config, list) and plot_config is not None: 
-                plot_config = [plot_config] 
+            if not isinstance(plot_config, list) and plot_config is not None:
+                plot_config = [plot_config]
             elif plot_config is None: # Handle case where plot_config might be None
                 plot_config = []
-                
+
             self.add_phase_plot_tab(name=name, plot_config=plot_config)
         self.settings.endArray()
-        
+
         if self.tabs.count() == 0: # If no tabs were loaded (e.g., first run)
             self.add_phase_plot_tab(name="Default Phase Plot")
         # DockedWidget's _read_settings calls self.settings.endGroup()
@@ -172,7 +173,7 @@ if __name__ == '__main__':
             # self.tickValueChanged.connect(func)
             self._callbacks.append(func)
             return func
-        
+
         def disconnect_tick_value_changed(self, func_ref):
             # self.tickValueChanged.disconnect(func_ref)
             if func_ref in self._callbacks:
@@ -186,7 +187,7 @@ if __name__ == '__main__':
     class MockDataFileWidget:
         def __init__(self):
             self.sources = {} # Assuming it stores by filename now for consistency with PhasePlotWidget needs
-        
+
         def add_source(self, source): # Assuming source has a 'filename' attribute
             if hasattr(source, 'filename'):
                 self.sources[source.filename] = source
@@ -194,9 +195,9 @@ if __name__ == '__main__':
                 self.sources[source.name()] = source
 
         # This method is used by PhasePlotWidget.load_plot_config
-        def get_data_file_by_name(self, source_id): 
+        def get_data_file_by_name(self, source_id):
             return self.sources.get(source_id)
-        
+
         # Keep get_source_by_id if it's used by other parts of the test setup,
         # but ensure get_data_file_by_name is what PhasePlotWidget expects.
         def get_source_by_id(self, source_id): # Potentially an alias or different lookup
@@ -204,14 +205,14 @@ if __name__ == '__main__':
 
 
     # Need pyqtgraph for SignalProxy if used in MockPlotManager
-    import pyqtgraph as pg 
+    import pyqtgraph as pg
 
     # --- Main Application Setup ---
     app = QApplication(sys.argv)
     # Required for QSettings to work without specifying org/app name
     app.setOrganizationName("TestOrg")
     app.setApplicationName("TestApp")
-    
+
     main_window = QMainWindow()
     main_window.setCentralWidget(QLabel("Main Window Area")) # Placeholder
 
@@ -222,7 +223,7 @@ if __name__ == '__main__':
     # Create and add the docked widget
     docked_phase_plot = DockedPhasePlotWidget(main_window, mock_plot_mgr, mock_df_widget)
     main_window.addDockWidget(Qt.RightDockWidgetArea, docked_phase_plot)
-    
+
     # Example: Add some mock data sources to data_file_widget for testing config load
     import numpy as np
     class MockDataSource:

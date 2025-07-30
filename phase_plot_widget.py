@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QVariant, QSettings # Added QSettings
 import pickle
 
 # Assuming flow_layout.py is in the same directory or Python path
-# from flow_layout import FlowLayout 
+# from flow_layout import FlowLayout
 # For now, I'll mock FlowLayout if it's not available in the environment.
 # If it's a custom class, it needs to be provided.
 try:
@@ -26,10 +26,10 @@ except ImportError:
                 widget = self.widgets.pop(index)
                 return self.itemAt(index) # QVBoxLayout specific
             return None
-        
+
         def count(self):
             return len(self.widgets)
-        
+
         def clear(self): # Custom clear for placeholder
             while self.count():
                 child = self.takeAt(0)
@@ -72,7 +72,7 @@ class PhasePlotWidget(QWidget):
         self.main_layout.addWidget(self.plot_widget)
 
         self._traces = []
-        
+
         # Marker related attributes
         self.cursor_marker_item = None # For scatter plot markers ('o', 's', etc.)
         self.cursor_crosshair_h = None # For horizontal line of crosshair
@@ -84,7 +84,7 @@ class PhasePlotWidget(QWidget):
         self.current_marker_type = settings.value("phase_plot/default_marker_type", "Circle")
         self.current_marker_size = int(settings.value("phase_plot/default_marker_size", 10))
         # Default color: Red, semi-transparent. Consider making this configurable later.
-        self.current_marker_color_tuple = (255, 0, 0, 120) 
+        self.current_marker_color_tuple = (255, 0, 0, 120)
 
         self.time_signal_connection = None # To store the connection
         self.color_index = 0
@@ -94,7 +94,7 @@ class PhasePlotWidget(QWidget):
 
         self.setAcceptDrops(True) # Enable drop events for the widget
         self.setFocusPolicy(Qt.StrongFocus) # For keyboard events
-        
+
         self.setLayout(self.main_layout)
 
     def keyPressEvent(self, event: QKeyEvent):
@@ -102,7 +102,7 @@ class PhasePlotWidget(QWidget):
             self.autoscale_plot()
             event.accept()
         else:
-            # Important to call super to allow other key events 
+            # Important to call super to allow other key events
             # to be processed if this widget doesn't handle them.
             super().keyPressEvent(event)
 
@@ -124,16 +124,26 @@ class PhasePlotWidget(QWidget):
                 event.ignore()
                 return
 
-            # Assuming data_item has 'name' (variable name) and 'source' (DataFile object with 'filename')
-            if not hasattr(data_item, 'name') or not hasattr(data_item, 'source') or not hasattr(data_item.source, 'filename'):
-                print("Error: Dropped DataItem is not structured as expected (missing name, source, or source.filename).")
+            # Get variable name from DataItem and source info from the drag source
+            if not hasattr(data_item, 'var_name'):
+                print("Error: Dropped DataItem is missing var_name property.")
                 self.status_label.setText("Error: Invalid data item dropped.")
                 QMessageBox.warning(self, "Drop Error", "The dropped item does not contain the necessary information (variable name or source file).")
                 event.ignore()
                 return
 
-            current_var_name = data_item.name
-            current_source_id = data_item.source.filename # filename of the source DataFile
+            current_var_name = data_item.var_name
+            drag_source = event.source()
+
+            # Get the filename from the drag source (the widget that initiated the drag)
+            if not hasattr(drag_source, 'filename'):
+                print("Error: Drag source does not have filename attribute.")
+                self.status_label.setText("Error: Cannot identify data source.")
+                QMessageBox.warning(self, "Drop Error", "The dropped item does not contain the necessary information (variable name or source file).")
+                event.ignore()
+                return
+
+            current_source_id = drag_source.filename
 
             if self.pending_x_var_name is None:
                 # This is the first drop (X variable)
@@ -156,12 +166,12 @@ class PhasePlotWidget(QWidget):
                     if not source_y:
                         error_msg += f" - Source for Y ('{current_source_id}') not found.\n"
                     error_msg += "Cleared pending X variable."
-                    
+
                     self.status_label.setText(error_msg)
                     QMessageBox.warning(self, "Error Adding Trace", error_msg)
-                
+
                 # Reset pending X for the next trace
-                self.clear_pending_x_variable() 
+                self.clear_pending_x_variable()
                 event.acceptProposedAction()
         else:
             event.ignore()
@@ -179,13 +189,13 @@ class PhasePlotWidget(QWidget):
             r, g, b = self.COLORS[self.color_index % len(self.COLORS)]
             color = pg.mkColor(r, g, b)
             self.color_index += 1
-        
+
         pen = pg.mkPen(color=color, width=PEN_WIDTH)
-        
+
         # Use provided name or generate default for PhasePlotItem
         trace_name = name if name else f"{var_name_x}_vs_{var_name_y}"
         item = PhasePlotItem(source_x, var_name_x, source_y, var_name_y, pen, name=trace_name)
-        
+
         self.plot_widget.getPlotItem().addItem(item.get_qt_item())
         self._traces.append(item)
         self._update_legend()
@@ -204,7 +214,7 @@ class PhasePlotWidget(QWidget):
         self._traces = []
         self.color_index = 0 # Reset color index
         self._update_legend()
-        
+
         # Explicitly clear/hide all marker types
         if self.cursor_marker_item:
             self.cursor_marker_item.setData(spots=[])
@@ -229,11 +239,11 @@ class PhasePlotWidget(QWidget):
             # Use var_name_x and var_name_y from PhasePlotItem for legend text
             legend_text = f"x: {trace_item.var_name_x} - y: {trace_item.var_name_y}"
             label = QLabel(legend_text)
-            
+
             # Set text color to match trace color
             qcolor = trace_item.pen.color() # This is a QColor
             label.setStyleSheet(f"color: {qcolor.name()}")
-            
+
             self.legend_layout.addWidget(label)
 
     def update_marker(self, tick_index):
@@ -266,7 +276,7 @@ class PhasePlotWidget(QWidget):
                 self.cursor_crosshair_v = pg.InfiniteLine(angle=90, movable=False, pen=crosshair_pen)
                 self.plot_widget.addItem(self.cursor_crosshair_h, ignoreBounds=True)
                 self.plot_widget.addItem(self.cursor_crosshair_v, ignoreBounds=True)
-            
+
             # Use the first point in valid_points for crosshair position
             primary_point = valid_points[0] # This is an (x,y) tuple
             self.cursor_crosshair_h.setPos(primary_point[1]) # Horizontal line at Y value
@@ -280,10 +290,10 @@ class PhasePlotWidget(QWidget):
             if self.cursor_marker_item is None:
                 self.cursor_marker_item = pg.ScatterPlotItem(pen=pg.mkPen(None)) # No border pen for markers
                 self.plot_widget.addItem(self.cursor_marker_item)
-            
+
             self.cursor_marker_item.setSize(self.current_marker_size)
             self.cursor_marker_item.setBrush(pg.mkBrush(*self.current_marker_color_tuple))
-            
+
             # Prepare spots data with the correct symbol for all points
             spots_data = [{'pos': p, 'symbol': actual_symbol, 'data': 1} for p in valid_points]
             self.cursor_marker_item.setData(spots=spots_data)
@@ -311,7 +321,7 @@ class PhasePlotWidget(QWidget):
 
         # Apply changes immediately by refreshing the marker display
         self.update_marker(self.last_tick_index)
-    
+
     def autoscale_plot(self):
         self.plot_widget.getPlotItem().autoRange()
 
@@ -319,7 +329,7 @@ class PhasePlotWidget(QWidget):
         menu = QMenu(self)
         autoscale_action = menu.addAction("Autoscale Plot")
         autoscale_action.triggered.connect(self.autoscale_plot)
-        
+
         clear_action = menu.addAction("Clear Plot")
         clear_action.triggered.connect(self.clear_plot)
 
@@ -328,7 +338,7 @@ class PhasePlotWidget(QWidget):
         clear_pending_x_action = menu.addAction("Clear Pending X Variable")
         clear_pending_x_action.triggered.connect(self.clear_pending_x_variable)
         clear_pending_x_action.setEnabled(self.pending_x_var_name is not None)
-        
+
         # TODO: Add action to add new trace? (might be complex here)
         # TODO: Add action to remove specific trace? (needs sub-menu or dialog)
         return menu
@@ -343,8 +353,8 @@ class PhasePlotWidget(QWidget):
             try:
                 time_emitter_signal.disconnect(self.time_signal_connection)
             except TypeError: # Catches "native Qt signal is not connected"
-                pass 
-        
+                pass
+
         self.time_signal_connection = time_emitter_signal.connect(self.update_marker)
 
     def get_plot_config(self):
@@ -363,7 +373,7 @@ class PhasePlotWidget(QWidget):
             if not all([source_x_id, var_x, source_y_id, var_y]): # Check all essential parts
                 print(f"Warning: Incomplete plot specification: {spec}. Skipping.")
                 continue
-            
+
             if self.data_file_widget is None:
                 print("Error: data_file_widget is not available in PhasePlotWidget. Cannot load plot config.")
                 QMessageBox.critical(self, "Load Error", "Data file handler not available. Cannot load traces.")
@@ -413,10 +423,10 @@ if __name__ == '__main__':
         def __init__(self, name, data_map):
             self._name = name
             self.data = data_map # e.g., {'rpm': np.array([...]), 'torque': np.array([...])}
-        
+
         def model(self): # To mimic the structure PhasePlotItem expects
             return self
-        
+
         def get_data_by_name(self, var_name):
             return self.data.get(var_name)
 
@@ -431,10 +441,10 @@ if __name__ == '__main__':
         def add_source(self, source):
             # In actual DataFileWidget, sources are likely stored by filename
             self.sources[source.filename] = source # Assuming source has .filename
-        
+
         def get_data_file_by_name(self, source_id): # Matching method name in DataFileWidget
             return self.sources.get(source_id)
-        
+
         # Mock DataItem for drag-drop testing
         class MockDataItem:
             def __init__(self, name, source_obj):
@@ -454,13 +464,13 @@ if __name__ == '__main__':
         def disconnect(self, callback_ref):
             if callback_ref in self._callbacks:
                 self._callbacks.remove(callback_ref)
-        
+
         def emit_tick(self, tick):
             for cb in self._callbacks:
                 cb(tick)
 
     app = QApplication(sys.argv)
-    
+
     # Create mock data
     t = np.linspace(0, 10, 500)
     source1_data_x = np.sin(t)
@@ -472,7 +482,7 @@ if __name__ == '__main__':
     MockDataSource.__init__ = lambda self, filename, data_map: (setattr(self, 'filename', filename), setattr(self, 'data', data_map))
     mock_source1 = MockDataSource("EngineData.csv", {'rpm': source1_data_x, 'load': source1_data_y})
     mock_source2 = MockDataSource("TransmissionData.log", {'speed': source2_data_x, 'torque': source2_data_y})
-    
+
     mock_dfw_for_init = MockDataFileWidget() # For PhasePlotWidget constructor
     mock_dfw_for_init.add_source(mock_source1)
     mock_dfw_for_init.add_source(mock_source2)
@@ -480,7 +490,7 @@ if __name__ == '__main__':
 
     # Setup widget
     main_window = PhasePlotWidget(parent=None, data_file_widget=mock_dfw_for_init)
-    
+
     # Add traces
     trace1 = main_window.add_trace(mock_source1, 'rpm', mock_source1, 'load', name="Engine RPM vs Load")
     trace2 = main_window.add_trace(mock_source2, 'speed', mock_source2, 'torque', name="Trans Speed vs Torque")
@@ -506,7 +516,7 @@ if __name__ == '__main__':
     # Test load_plot_config (uses self.data_file_widget passed in constructor)
     # To test load, clear current traces and load them back from config
     # print("Plot Config before save:", config)
-    # main_window.clear_plot() 
+    # main_window.clear_plot()
     # print("Loading config...")
     # main_window.load_plot_config(config) # No longer needs mock_dfw as arg
     # print("Config loaded.")
@@ -518,7 +528,7 @@ if __name__ == '__main__':
     def simulate_drop(var_name, source_obj):
         data_item_instance = MockDataItem(var_name, source_obj)
         pickled_data = pickle.dumps(data_item_instance)
-        
+
         # Create a mock MimeData
         class MockMimeData:
             def __init__(self):
@@ -529,7 +539,7 @@ if __name__ == '__main__':
                 return self._data.get(mime_type)
             def setData(self, mime_type, data):
                 self._data[mime_type] = data
-        
+
         mime = MockMimeData()
         mime.setData("application/x-DataItem", pickled_data)
 
@@ -555,7 +565,7 @@ if __name__ == '__main__':
 
     # Simulate dropping variable for X axis
     print("\nSimulating drop for X axis (rpm from EngineData.csv)...")
-    simulate_drop('rpm', mock_source1) 
+    simulate_drop('rpm', mock_source1)
     print(f"Pending X: {main_window.pending_x_var_name} from {main_window.pending_x_source_id}")
 
     # Simulate dropping variable for Y axis
@@ -570,7 +580,7 @@ if __name__ == '__main__':
     print("\nSimulating drop for X axis (speed from TransmissionData.log)...")
     simulate_drop('speed', mock_source2)
     print(f"Pending X: {main_window.pending_x_var_name} from {main_window.pending_x_source_id}")
-    
+
     # Test clear pending X via context menu action (if possible to simulate menu click easily)
     # Alternatively, call the method directly
     # main_window.clear_pending_x_variable()
@@ -584,7 +594,7 @@ if __name__ == '__main__':
     print(f"Number of traces: {len(main_window.get_traces())}")
     if len(main_window.get_traces()) > 1:
         print(f"Trace 2 spec: {main_window.get_traces()[1].get_plot_spec()}")
-    
+
     main_window.autoscale_plot()
 
 
