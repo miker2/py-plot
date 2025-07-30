@@ -31,8 +31,8 @@ class DockedPhasePlotWidget(DockedWidget):
         # This check is now moved to the end of _read_settings itself.
 
     def add_phase_plot_tab(self, name=None, plot_config=None):
-        # PhasePlotWidget now takes data_file_widget in its constructor.
-        new_phase_plot_widget = PhasePlotWidget(parent=self.tabs, data_file_widget=self.data_file_widget)
+        # PhasePlotWidget now takes data_file_widget and plot_manager in its constructor.
+        new_phase_plot_widget = PhasePlotWidget(parent=self.tabs, data_file_widget=self.data_file_widget, plot_manager=self.plot_manager)
 
         # Connect its time signal. PhasePlotWidget has connect_to_time_signal method.
         # Let's use that for consistency if the signal name might vary or needs internal management.
@@ -48,9 +48,7 @@ class DockedPhasePlotWidget(DockedWidget):
             print("Warning: PlotManager has neither tickValueChanged nor timeValueChanged signal for PhasePlotWidget.")
 
         if time_signal:
-            # If PhasePlotWidget.connect_to_time_signal is preferred:
-            # new_phase_plot_widget.connect_to_time_signal(time_signal)
-            # For now, direct connection as it was:
+            # Connect marker updates (individual traces connect themselves to value updates)
             time_signal.connect(new_phase_plot_widget.update_marker)
 
 

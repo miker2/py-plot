@@ -74,12 +74,52 @@ class PhasePlotCustomItem(CustomPlotItem):
         if hasattr(source_y, 'idx') and source_y.idx is not None:
             y_prefix = f"F{source_y.idx}:"
 
-        return f"x: {x_prefix}{self.phase_plot_item.var_name_x} - y: {y_prefix}{self.phase_plot_item.var_name_y}"
+        base_label = f"x: {x_prefix}{self.phase_plot_item.var_name_x} - y: {y_prefix}{self.phase_plot_item.var_name_y}"
+
+        # Add current values if we have a valid tick
+        if hasattr(self, '_tick') and self._tick is not None:
+            x_val, y_val = self._get_current_values(self._tick)
+            if x_val is not None and y_val is not None:
+                # Format values similar to CustomPlotItem
+                x_str = self._format_value(x_val)
+                y_str = self._format_value(y_val)
+                return f"{base_label} ({x_str}, {y_str})"
+
+        return base_label
 
     def on_time_changed(self, time):
-        """Override to disable time-based updates for phase plots"""
-        # Phase plots don't show current values, so we don't update
-        pass
+        """Override to update phase plot values at current time"""
+        # Convert time to tick index for both X and Y sources
+        import graph_utils
+
+        # Get tick indices for both sources (they might be different if sources have different sampling rates)
+        try:
+            # Use the X source time for tick calculation (similar to CustomPlotItem)
+            self._tick = graph_utils.time_to_tick(self.phase_plot_item.source_x.time, time)
+        except Exception as e:
+            print(f"Error in time_to_tick conversion: {e}")
+            self._tick = 0
+
+        # Update the label to show current values
+        self.setText(self._generate_label())
+
+    def _get_current_values(self, tick):
+        """Get the current X and Y values at the given tick index"""
+        try:
+            # Get the data point at the current tick from the phase plot item
+            point_data = self.phase_plot_item.get_data_at_tick(tick)
+            if point_data is not None:
+                return point_data  # Returns (x, y) tuple
+        except Exception:
+            pass
+        return None, None
+
+    def _format_value(self, value):
+        """Format a value for display, similar to CustomPlotItem"""
+        if isinstance(value, (int, np.integer)):
+            return f"{value:d}"
+        else:
+            return f"{value:.6g}"
 
     def remove_item(self):
         """Override to call phase plot's remove method"""
@@ -112,9 +152,10 @@ class PhasePlotWidget(QWidget):
     COLORS = ('#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#a65628', '#D4C200', '#f781bf')
     # Using PEN_WIDTH from PhasePlotItem
 
-    def __init__(self, parent, data_file_widget): # Modified signature
+    def __init__(self, parent, data_file_widget, plot_manager=None): # Modified signature
         super().__init__(parent)
         self.data_file_widget = data_file_widget # Store data_file_widget
+        self.plot_manager = plot_manager # Store plot_manager
         self.main_layout = QVBoxLayout(self)
 
         self.legend_layout = FlowLayout() # Or QVBoxLayout if FlowLayout is not found
@@ -261,6 +302,16 @@ class PhasePlotWidget(QWidget):
         label = PhasePlotCustomItem(self, item)
         self._traces.append(label)  # Store the legend item, like SubPlotWidget does
         self.legend_layout.addWidget(label)
+
+        # Connect to time signal directly using stored plot_manager (similar to SubPlotWidget)
+        if self.plot_manager and hasattr(self.plot_manager, 'timeValueChanged'):
+            self.plot_manager.timeValueChanged.connect(label.on_time_changed)
+            print(f"Connected phase plot label to timeValueChanged signal")
+        elif self.plot_manager and hasattr(self.plot_manager, 'tickValueChanged'):
+            self.plot_manager.tickValueChanged.connect(label.on_time_changed)
+            print(f"Connected phase plot label to tickValueChanged signal")
+        else:
+            print(f"Warning: No plot_manager available for time signal connection")
 
         # Connect to source onClose signals to automatically remove trace when files are closed
         if hasattr(source_x, 'onClose'):
@@ -494,6 +545,12 @@ class PhasePlotWidget(QWidget):
         """Returns the internal pyqtgraph.PlotWidget instance."""
         return self.plot_widget
 
+    def connect_labels_to_time_signal(self, time_signal):
+        """Connect all legend labels to the time signal for value updates"""
+        self._time_signal = time_signal  # Store reference for future traces
+        for label in self._traces:
+            time_signal.connect(label.on_time_changed)
+
     @staticmethod
     def _get_color(idx):
         """Get color by index, same as SubPlotWidget"""
@@ -576,7 +633,7 @@ if __name__ == '__main__':
 
 
     # Setup widget
-    main_window = PhasePlotWidget(parent=None, data_file_widget=mock_dfw_for_init)
+    main_window = PhasePlotWidget(parent=None, data_file_widget=mock_dfw_for_init, plot_manager=None)
 
     # Add traces
     trace1 = main_window.add_trace(mock_source1, 'rpm', mock_source1, 'load', name="Engine RPM vs Load")
