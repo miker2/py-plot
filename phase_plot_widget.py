@@ -1,8 +1,9 @@
 import pyqtgraph as pg
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QMenu, QAction, QMessageBox
-from PyQt5.QtGui import QPalette, QColor, QKeyEvent # Added QKeyEvent for keyPressEvent
-from PyQt5.QtCore import Qt, QVariant, QSettings # Added QSettings
+from PyQt5.QtGui import QPalette, QColor, QKeyEvent, QPixmap, QPainter # Added QKeyEvent for keyPressEvent
+from PyQt5.QtCore import Qt, QVariant, QSettings, QRect # Added QSettings
 import pickle
+import os
 
 # Assuming flow_layout.py is in the same directory or Python path
 # from flow_layout import FlowLayout
@@ -41,15 +42,64 @@ except ImportError:
 
 
 from phase_plot_item import PhasePlotItem, PEN_WIDTH # PEN_WIDTH is from phase_plot_item
+from custom_plot_item import CustomPlotItem
 import numpy as np
 
+class PhasePlotCustomItem(CustomPlotItem):
+    """Customized version of CustomPlotItem for phase plots"""
+    
+    def __init__(self, parent, phase_plot_item):
+        self.phase_plot_item = phase_plot_item
+        
+        # Create a mock trace object that CustomPlotItem expects
+        # We'll override the methods that need different behavior
+        mock_plot_data_item = phase_plot_item.get_qt_item()
+        mock_source = None  # We'll handle sources differently
+        current_tick = 0    # Phase plots don't use time ticks
+        
+        super().__init__(parent, mock_plot_data_item, mock_source, current_tick)
+    
+    def _generate_label(self):
+        """Override to show phase plot format with file prefixes: 'x: F#:var_name_x - y: F#:var_name_y'"""
+        # Get source info from the phase plot item
+        source_x = self.phase_plot_item.source_x
+        source_y = self.phase_plot_item.source_y
+        
+        # Create prefixes for X and Y variables
+        x_prefix = ""
+        y_prefix = ""
+        
+        if hasattr(source_x, 'idx') and source_x.idx is not None:
+            x_prefix = f"F{source_x.idx}:"
+        if hasattr(source_y, 'idx') and source_y.idx is not None:
+            y_prefix = f"F{source_y.idx}:"
+        
+        return f"x: {x_prefix}{self.phase_plot_item.var_name_x} - y: {y_prefix}{self.phase_plot_item.var_name_y}"
+    
+    def on_time_changed(self, time):
+        """Override to disable time-based updates for phase plots"""
+        # Phase plots don't show current values, so we don't update
+        pass
+    
+    def remove_item(self):
+        """Override to call phase plot's remove method"""
+        self.parent().remove_trace(self.phase_plot_item)
+    
+    def toggle_trace(self, is_checked):
+        """Override to work with phase plot items"""
+        if is_checked:
+            # Hide the trace
+            self.phase_plot_item.get_qt_item().hide()
+        else:
+            # Show the trace
+            self.phase_plot_item.get_qt_item().show()
+        
+        # Update label appearance (call parent method for consistent styling)
+        super().toggle_trace(is_checked)
+
 class PhasePlotWidget(QWidget):
-    # Copied from a typical SubPlotWidget.COLORS, adjust if different
-    COLORS = (
-        (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255),
-        (255, 0, 255), (200, 100, 0), (100, 200, 0), (0, 200, 100), (0, 100, 200),
-        (100, 0, 200), (200, 0, 100)
-    )
+    # Use the exact same colors as SubPlotWidget for consistency
+    COLORS = ('#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#a65628', '#D4C200', '#f781bf')
     # Using PEN_WIDTH from PhasePlotItem
 
     def __init__(self, parent, data_file_widget): # Modified signature
@@ -87,7 +137,7 @@ class PhasePlotWidget(QWidget):
         self.current_marker_color_tuple = (255, 0, 0, 120)
 
         self.time_signal_connection = None # To store the connection
-        self.color_index = 0
+        self.cidx = 0  # Color index, same as SubPlotWidget
 
         self.pending_x_var_name = None
         self.pending_x_source_id = None # Will store filename of the source for X
@@ -186,9 +236,8 @@ class PhasePlotWidget(QWidget):
         if color_str:
             color = pg.mkColor(color_str)
         else:
-            r, g, b = self.COLORS[self.color_index % len(self.COLORS)]
-            color = pg.mkColor(r, g, b)
-            self.color_index += 1
+            color = pg.mkColor(self._get_color(self.cidx))
+            self.cidx += 1
 
         pen = pg.mkPen(color=color, width=PEN_WIDTH)
 
@@ -197,23 +246,49 @@ class PhasePlotWidget(QWidget):
         item = PhasePlotItem(source_x, var_name_x, source_y, var_name_y, pen, name=trace_name)
 
         self.plot_widget.getPlotItem().addItem(item.get_qt_item())
-        self._traces.append(item)
-        self._update_legend()
+        
+        # Create the legend label (following SubPlotWidget pattern)
+        label = PhasePlotCustomItem(self, item)
+        self._traces.append(label)  # Store the legend item, like SubPlotWidget does
+        self.legend_layout.addWidget(label)
+        
+        # Connect to source onClose signals to automatically remove trace when files are closed
+        if hasattr(source_x, 'onClose'):
+            source_x.onClose.connect(lambda label=label: self.remove_trace(label.phase_plot_item))
+        if hasattr(source_y, 'onClose') and source_y != source_x:
+            source_y.onClose.connect(lambda label=label: self.remove_trace(label.phase_plot_item))
+        
         return item # Return the item in case the caller wants to interact with it
 
     def remove_trace(self, phase_plot_item_instance):
-        if phase_plot_item_instance in self._traces:
+        # Find the legend label that corresponds to this phase plot item
+        label_to_remove = None
+        for label in self._traces:
+            if label.phase_plot_item == phase_plot_item_instance:
+                label_to_remove = label
+                break
+        
+        if label_to_remove:
+            # Remove the plot item from the plot
             self.plot_widget.getPlotItem().removeItem(phase_plot_item_instance.get_qt_item())
-            self._traces.remove(phase_plot_item_instance)
-            self._update_legend()
-            self.update_marker(self.last_tick_index) # Update markers as a trace was removed
+            # Remove the label from the layout and close it
+            self.legend_layout.removeWidget(label_to_remove)
+            label_to_remove.close()
+            # Remove from our traces list
+            self._traces.remove(label_to_remove)
+            # Update markers since trace was removed
+            self.update_marker(self.last_tick_index)
 
     def clear_plot(self):
-        for item in self._traces:
-            self.plot_widget.getPlotItem().removeItem(item.get_qt_item())
+        for label in self._traces:
+            # Remove the plot item from the plot
+            self.plot_widget.getPlotItem().removeItem(label.phase_plot_item.get_qt_item())
+            # Remove the label from the layout and close it
+            self.legend_layout.removeWidget(label)
+            label.close()
+        
         self._traces = []
-        self.color_index = 0 # Reset color index
-        self._update_legend()
+        self.cidx = 0 # Reset color index
 
         # Explicitly clear/hide all marker types
         if self.cursor_marker_item:
@@ -227,32 +302,17 @@ class PhasePlotWidget(QWidget):
 
 
     def _update_legend(self):
-        # Clear existing legend items
-        # Proper way to clear FlowLayout items:
-        while self.legend_layout.count():
-            item = self.legend_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
-
-        for trace_item in self._traces:
-            # Use var_name_x and var_name_y from PhasePlotItem for legend text
-            legend_text = f"x: {trace_item.var_name_x} - y: {trace_item.var_name_y}"
-            label = QLabel(legend_text)
-
-            # Set text color to match trace color
-            qcolor = trace_item.pen.color() # This is a QColor
-            label.setStyleSheet(f"color: {qcolor.name()}")
-
-            self.legend_layout.addWidget(label)
+        # This method is no longer needed since we manage legend items directly in add_trace()
+        # Keeping it for compatibility but it's now a no-op
+        pass
 
     def update_marker(self, tick_index):
         self.last_tick_index = tick_index
 
         valid_points = []
         if self._traces: # Only proceed if there are traces
-            for trace in self._traces:
-                point_data = trace.get_data_at_tick(tick_index)
+            for label in self._traces:
+                point_data = label.phase_plot_item.get_data_at_tick(tick_index)
                 if point_data is not None:
                     valid_points.append(point_data) # Store as (x,y) tuples
 
@@ -358,7 +418,7 @@ class PhasePlotWidget(QWidget):
         self.time_signal_connection = time_emitter_signal.connect(self.update_marker)
 
     def get_plot_config(self):
-        return [item.get_plot_spec() for item in self._traces]
+        return [label.phase_plot_item.get_plot_spec() for label in self._traces]
 
     def load_plot_config(self, config_list): # Removed data_file_widget from args, use self.data_file_widget
         self.clear_plot()
@@ -406,11 +466,16 @@ class PhasePlotWidget(QWidget):
 
     def get_traces(self):
         """Returns the list of PhasePlotItem instances."""
-        return self._traces
+        return [label.phase_plot_item for label in self._traces]
 
     def get_plot_widget(self):
         """Returns the internal pyqtgraph.PlotWidget instance."""
         return self.plot_widget
+    
+    @staticmethod
+    def _get_color(idx):
+        """Get color by index, same as SubPlotWidget"""
+        return PhasePlotWidget.COLORS[idx % len(PhasePlotWidget.COLORS)]
 
 # Example Usage (for testing purposes, if run directly)
 if __name__ == '__main__':
