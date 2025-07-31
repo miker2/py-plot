@@ -1,7 +1,7 @@
 # Ported from the C++ implementation found here:
 #  https://doc.qt.io/qt-5/qtwidgets-layouts-flowlayout-example.html
 
-from PyQt5.QtWidgets import QLayout, QStyle, QSizePolicy
+from PyQt5.QtWidgets import QLayout, QStyle, QSizePolicy, QWidgetItem, QWidget
 from PyQt5.QtCore import Qt, QPoint, QRect, QSize
 
 
@@ -26,6 +26,9 @@ class FlowLayout(QLayout):
 
     def addItem(self, item):
         self._item_list.append(item)
+
+    def insertWidget(self, index: int, item: QWidget):
+        self._item_list.insert(index, QWidgetItem(item))
 
     def horizontal_spacing(self):
         if self._h_space >= 0:

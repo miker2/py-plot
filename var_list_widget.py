@@ -6,6 +6,9 @@ from PyQt5.QtCore import Qt, pyqtSignal, QMimeData
 
 import pickle
 from data_model import DataModel
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class VarListWidget(QListView):
@@ -73,7 +76,7 @@ class VarListWidget(QListView):
 
     @staticmethod
     def item_pressed(index):
-        print(f"You pressed {index.row()} : {index.data()}")
+        logger.debug(f"You pressed {index.row()} : {index.data()}")
 
     def keyPressEvent(self, event):
         # We want to ignore the Up/Down arrow keys in the list here so that the "Zoom" functionality
