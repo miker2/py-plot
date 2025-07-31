@@ -74,14 +74,28 @@ class MathSpecBase(QObject):
             if self.get_params():
                 val = self.do_math(selected, vlist.model().avg_dt)
 
-                vname, accept = QInputDialog.getText(self.parent(), "Enter variable name", "Variable name:",
-                                                     text=self.default_var_name(selected.var_name))
-                if accept:
-                    data_item = DataItem(vname, val)
-                    data_item._time = selected._time
-                    self.parent().add_new_var(data_item, vlist)
-                else:
-                    print("User cancelled operation!")
+                # Loop until user provides a unique name or cancels
+                default_vname = self.default_var_name(selected.var_name)
+
+                while True:
+                    vname, accept = QInputDialog.getText(self.parent(), "Enter variable name", "Variable name:",
+                                                         text=default_vname)
+                    if not accept:
+                        print("User cancelled operation!")
+                        break
+
+                    # Check for name conflicts
+                    if vlist.model().has_variable(vname):
+                        QMessageBox.warning(self.parent(), "Name Conflict",
+                                          f"Variable name '{vname}' already exists.\nPlease choose a different name.")
+                        default_vname = vname  # Keep user's input as default for next attempt
+                        continue
+                    else:
+                        # Name is unique, create the variable
+                        data_item = DataItem(vname, val)
+                        data_item._time = selected._time
+                        self.parent().add_new_var(data_item, vlist)
+                        break
             else:
                 print("User cancelled operation!")
 

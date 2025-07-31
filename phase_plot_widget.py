@@ -279,6 +279,8 @@ class PhasePlotWidget(QWidget):
                 # This is the first drop (X variable)
                 self.pending_x_var_name = current_var_name
                 self.pending_x_source_id = current_source_id
+
+
                 self.status_label.setText(f"X: {self.pending_x_var_name} (from {self.pending_x_source_id}). Drop Y variable.")
                 event.acceptProposedAction()
             else:
