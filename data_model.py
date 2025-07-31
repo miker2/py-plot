@@ -34,6 +34,19 @@ class DataItem(object):
         return self._var_name
 
 
+class SeparatorItem(DataItem):
+    """
+        Special DataItem that acts as a visual separator
+    """
+
+    def __init__(self):
+        super().__init__("─── Derived Variables ───", None)
+
+    @property
+    def is_separator(self):
+        return True
+
+
 class DataModel(QAbstractListModel):
     def __init__(self, data_loader, parent=None):
         QAbstractListModel.__init__(self, parent=parent)
@@ -101,7 +114,31 @@ class DataModel(QAbstractListModel):
             # print(type(index))
             # print(type(index.row()))
             return self._data[index.row()]
+        elif role == Qt.ForegroundRole:
+            item = self._data[index.row()]
+            if isinstance(item, SeparatorItem):
+                # Make separator text lighter/grayed out
+                from PyQt5.QtGui import QColor
+                return QVariant(QColor(128, 128, 128))  # Gray color
+        elif role == Qt.FontRole:
+            item = self._data[index.row()]
+            if isinstance(item, SeparatorItem):
+                # Make separator text italic
+                from PyQt5.QtGui import QFont
+                font = QFont()
+                font.setItalic(True)
+                return QVariant(font)
         return QVariant()
+
+    def flags(self, index):
+        """Override flags to make separator items non-selectable"""
+        item = self._data[index.row()]
+        if isinstance(item, SeparatorItem):
+            # Separator items are enabled but not selectable
+            return Qt.ItemIsEnabled
+        else:
+            # Normal items are enabled and selectable
+            return Qt.ItemIsEnabled | Qt.ItemIsSelectable
 
     def has_key(self, name):
         return name in self._raw_data.index
@@ -156,7 +193,9 @@ class DataModel(QAbstractListModel):
             self._data.append(DataItem(var, self._raw_data[var].to_numpy()))
 
         # Add derived variables at the end (sorted)
-        if self._show_derived:
+        if self._show_derived and self._derived_data:
+            # Add separator before derived variables
+            self._data.append(SeparatorItem())
             for var in sorted(self._derived_data.keys()):
                 self._data.append(self._derived_data[var])
 
