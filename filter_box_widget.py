@@ -46,13 +46,7 @@ class FilterBoxWidget(QWidget):
 
             tab_widget = self.df_widget.currentWidget()
             # Get the VarListWidget from the container
-            list_view = None
-            if hasattr(tab_widget, 'layout') and tab_widget.layout():
-                list_view = tab_widget.layout().itemAt(1).widget()  # VarListWidget is second item
-
-            if not list_view:
-                return
-
+            list_view = tab_widget.var_list
             model = list_view.model()
 
             selected = list_view.currentIndex()

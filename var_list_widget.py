@@ -69,18 +69,16 @@ class VarListWidget(QListView):
         while parent and not hasattr(parent, 'tabs'):
             parent = parent.parent()
 
-        if parent and hasattr(parent, 'tabs'):
+        if parent:
             if parent.tabs.count() == 1:
                 self._idx = None
             else:
                 # Find which tab contains this VarListWidget
                 for i in range(parent.tabs.count()):
                     tab_widget = parent.tabs.widget(i)
-                    if hasattr(tab_widget, 'layout') and tab_widget.layout():
-                        var_list = tab_widget.layout().itemAt(1).widget()
-                        if var_list == self:
-                            self._idx = i + 1
-                            break
+                    if tab_widget.var_list == self:
+                        self._idx = i + 1
+                        break
         else:
             self._idx = None
 

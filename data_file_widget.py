@@ -56,6 +56,10 @@ class DataFileWidget(QWidget):
         self.sources = dict()
         self.latest_data_file_name = None
 
+    def _get_var_list_from_tab(self, tab_widget):
+        """Helper to extract VarListWidget from tab container"""
+        return tab_widget.var_list
+
     @property
     def open_count(self):
         return self.tabs.count()
@@ -74,6 +78,9 @@ class DataFileWidget(QWidget):
         tab_layout = QVBoxLayout(tab_widget)
         tab_layout.setContentsMargins(2, 2, 2, 2)  # Small margins
         tab_layout.setSpacing(2)  # Small spacing
+
+        # Store direct reference to VarListWidget on the container
+        tab_widget.var_list = var_list
 
         # Add checkbox for derived variables toggle
         derived_checkbox = QCheckBox("Show derived variables")
@@ -117,15 +124,10 @@ class DataFileWidget(QWidget):
     def close_file(self, index):
         # Add function for closing the tab here.
         tab_widget = self.tabs.widget(index)
-        var_list = None
-        if hasattr(tab_widget, 'layout') and tab_widget.layout():
-            var_list = tab_widget.layout().itemAt(1).widget()
+        var_list = self._get_var_list_from_tab(tab_widget)
 
-        if var_list:
-            filename = var_list.filename
-            var_list.close()
-        else:
-            filename = "unknown"
+        filename = var_list.filename
+        var_list.close()
 
         self.tabs.removeTab(index)
         if self.tabs.count() > 0:
@@ -136,18 +138,14 @@ class DataFileWidget(QWidget):
 
     def get_active_data_file(self):
         tab_widget = self.tabs.currentWidget()
-        if hasattr(tab_widget, 'layout') and tab_widget.layout():
-            return tab_widget.layout().itemAt(1).widget()  # Return the VarListWidget
-        return tab_widget
+        return self._get_var_list_from_tab(tab_widget)
 
     def get_latest_data_file_name(self):
         return self.latest_data_file_name
 
     def get_data_file(self, idx):
         tab_widget = self.tabs.widget(idx)
-        if hasattr(tab_widget, 'layout') and tab_widget.layout():
-            return tab_widget.layout().itemAt(1).widget()  # Return the VarListWidget
-        return tab_widget
+        return self._get_var_list_from_tab(tab_widget)
 
     def get_data_file_by_name(self, name):
         return self.sources[name]
@@ -190,13 +188,11 @@ class DataFileWidget(QWidget):
 
         for idx in range(self.tabs.count()):
             tab_widget = self.tabs.widget(idx)
-            # Get the VarListWidget from the container
-            if hasattr(tab_widget, 'layout') and tab_widget.layout():
-                var_list = tab_widget.layout().itemAt(1).widget()  # VarListWidget is second item
-                t_range = var_list.time_range
-                logger.debug(f"idx: {idx} - Time range: {t_range}")
-                min_time = min(min_time, t_range[0])
-                max_time = max(max_time, t_range[1])
+            var_list = self._get_var_list_from_tab(tab_widget)
+            t_range = var_list.time_range
+            logger.debug(f"idx: {idx} - Time range: {t_range}")
+            min_time = min(min_time, t_range[0])
+            max_time = max(max_time, t_range[1])
         logger.debug(f"min_time: {min_time}, max_time: {max_time}")
 
         # TODO(rose@) replace this with signal/slot logic
@@ -204,21 +200,13 @@ class DataFileWidget(QWidget):
 
     def _copy_to_clipboard(self, idx):
         cb = QApplication.clipboard()
-        # Get the VarListWidget from the container
         tab_widget = self.tabs.widget(idx)
-        if hasattr(tab_widget, 'layout') and tab_widget.layout():
-            var_list = tab_widget.layout().itemAt(1).widget()
-            cb.setText(var_list.filename)
+        var_list = self._get_var_list_from_tab(tab_widget)
+        cb.setText(var_list.filename)
 
     def _set_time_offset(self, idx):
-        # Get the VarListWidget from the container
         tab_widget = self.tabs.widget(idx)
-        var_list = None
-        if hasattr(tab_widget, 'layout') and tab_widget.layout():
-            var_list = tab_widget.layout().itemAt(1).widget()
-
-        if not var_list:
-            return
+        var_list = self._get_var_list_from_tab(tab_widget)
 
         # Create a dialog box for getting user input. This can be created on the fly.
         time_offset_dialog = QDialog(tab_widget)
