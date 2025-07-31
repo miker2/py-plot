@@ -5,41 +5,7 @@ from PyQt5.QtCore import Qt, QVariant, QSettings, QRect # Added QSettings
 import pickle
 import os
 
-# Assuming flow_layout.py is in the same directory or Python path
-# from flow_layout import FlowLayout
-# For now, I'll mock FlowLayout if it's not available in the environment.
-# If it's a custom class, it needs to be provided.
-try:
-    from flow_layout import FlowLayout
-except ImportError:
-    print("Warning: FlowLayout not found. Using QVBoxLayout as a placeholder for legend_layout.")
-    class FlowLayout(QVBoxLayout): # Placeholder
-        def __init__(self, parent=None):
-            super().__init__(parent)
-            self.widgets = []
-
-        def addWidget(self, widget):
-            super().addWidget(widget)
-            self.widgets.append(widget)
-
-        def takeAt(self, index):
-            if 0 <= index < len(self.widgets):
-                widget = self.widgets.pop(index)
-                return self.itemAt(index) # QVBoxLayout specific
-            return None
-
-        def count(self):
-            return len(self.widgets)
-
-        def clear(self): # Custom clear for placeholder
-            while self.count():
-                child = self.takeAt(0)
-                if child:
-                    widget = child.widget()
-                    if widget:
-                        widget.deleteLater()
-            self.widgets = []
-
+from flow_layout import FlowLayout
 
 from phase_plot_item import PhasePlotItem, PEN_WIDTH # PEN_WIDTH is from phase_plot_item
 from custom_plot_item import CustomPlotItem
