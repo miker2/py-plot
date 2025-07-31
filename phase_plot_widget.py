@@ -536,6 +536,9 @@ class PhasePlotWidget(QWidget):
         """Update marker settings from QSettings and refresh display"""
         settings = QSettings()
 
+        # Clear all existing markers before applying new settings
+        self._clear_all_markers()
+
         # Update marker type
         self.current_marker_type = settings.value("phase_plot/default_marker_type", "Circle")
 
@@ -549,6 +552,13 @@ class PhasePlotWidget(QWidget):
 
         # Refresh the marker display with new settings
         self.update_marker(self.last_tick_index)
+
+    def _clear_all_markers(self):
+        """Remove all existing markers from the plot and clear tracking"""
+        for trace_id, marker_items in self.trace_markers.items():
+            for marker_item in marker_items.values():
+                self.plot_widget.removeItem(marker_item)
+        self.trace_markers.clear()
 
     def autoscale_plot(self):
         self.plot_widget.getPlotItem().autoRange()
