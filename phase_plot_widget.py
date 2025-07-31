@@ -50,6 +50,7 @@ class PhasePlotCustomItem(CustomPlotItem):
 
     def __init__(self, parent, phase_plot_item):
         self.phase_plot_item = phase_plot_item
+        self.cursor_visible = True  # Track cursor visibility for this trace
 
         # Create a mock trace object that CustomPlotItem expects
         # We'll override the methods that need different behavior
@@ -137,6 +138,9 @@ class PhasePlotCustomItem(CustomPlotItem):
         # Update label appearance (call parent method for consistent styling)
         super().toggle_trace(is_checked)
 
+        # Update markers to show/hide cursor based on trace visibility
+        self.parent().update_marker(self.parent().last_tick_index)
+
     def update_color(self, color_str):
         """Override to update both the phase plot item and the label"""
         # Update the phase plot item's pen
@@ -146,6 +150,31 @@ class PhasePlotCustomItem(CustomPlotItem):
 
         # Update the label appearance (call parent method)
         super().update_color(color_str)
+
+    def create_menu(self):
+        """Override to add cursor visibility option"""
+        menu = super().create_menu()
+
+        # Add separator before cursor options
+        menu.addSeparator()
+
+        # Add cursor visibility toggle
+        cursor_action = menu.addAction("Hide cursor")
+        cursor_action.setCheckable(True)
+        cursor_action.setChecked(not self.cursor_visible)
+        cursor_action.triggered.connect(self.toggle_cursor_visibility)
+
+        return menu
+
+    def toggle_cursor_visibility(self, is_checked):
+        """Toggle cursor visibility for this trace"""
+        self.cursor_visible = not is_checked
+        # Update the menu text
+        action = self.sender()
+        action.setText("Show cursor" if is_checked else "Hide cursor")
+
+        # Trigger marker update to show/hide this trace's cursor
+        self.parent().update_marker(self.parent().last_tick_index)
 
 class PhasePlotWidget(QWidget):
     # Use the exact same colors as SubPlotWidget for consistency
@@ -174,18 +203,18 @@ class PhasePlotWidget(QWidget):
 
         self._traces = []
 
-        # Marker related attributes
-        self.cursor_marker_item = None # For scatter plot markers ('o', 's', etc.)
-        self.cursor_crosshair_h = None # For horizontal line of crosshair
-        self.cursor_crosshair_v = None # For vertical line of crosshair
-        self.last_tick_index = 0       # To store the last known tick index
+        # Marker related attributes - now stored per trace
+        self.trace_markers = {}  # Dictionary to store markers per trace: trace_id -> marker_items
+        self.last_tick_index = 0  # To store the last known tick index
 
         # Load default marker settings
         settings = QSettings()
         self.current_marker_type = settings.value("phase_plot/default_marker_type", "Circle")
         self.current_marker_size = int(settings.value("phase_plot/default_marker_size", 10))
-        # Default color: Red, semi-transparent. Consider making this configurable later.
-        self.current_marker_color_tuple = (255, 0, 0, 120)
+        # Default color: Black, more opaque for better visibility
+        default_color = settings.value("phase_plot/marker_color", "0,0,0,200")  # "R,G,B,A" format
+        color_parts = [int(x) for x in default_color.split(',')]
+        self.current_marker_color_tuple = tuple(color_parts)
 
         self.time_signal_connection = None # To store the connection
         self.cidx = 0  # Color index, same as SubPlotWidget
@@ -330,6 +359,16 @@ class PhasePlotWidget(QWidget):
                 break
 
         if label_to_remove:
+            # Clean up markers for this trace
+            trace_id = id(label_to_remove)
+            if trace_id in self.trace_markers:
+                marker_items = self.trace_markers[trace_id]
+                # Remove all marker items from the plot
+                for marker_item in marker_items.values():
+                    self.plot_widget.removeItem(marker_item)
+                # Remove from our marker tracking
+                del self.trace_markers[trace_id]
+
             # Remove the plot item from the plot
             self.plot_widget.getPlotItem().removeItem(phase_plot_item_instance.get_qt_item())
             # Remove the label from the layout and close it
@@ -360,18 +399,14 @@ class PhasePlotWidget(QWidget):
             self.legend_layout.removeWidget(label)
             label.close()
 
+        # Clean up all markers
+        for trace_id, marker_items in self.trace_markers.items():
+            for marker_item in marker_items.values():
+                self.plot_widget.removeItem(marker_item)
+        self.trace_markers.clear()
+
         self._traces = []
         self.cidx = 0 # Reset color index
-
-        # Explicitly clear/hide all marker types
-        if self.cursor_marker_item:
-            self.cursor_marker_item.setData(spots=[])
-        if self.cursor_crosshair_h:
-            self.cursor_crosshair_h.hide()
-        if self.cursor_crosshair_v:
-            self.cursor_crosshair_v.hide()
-        # Ensure last_tick_index is reset or handled appropriately if needed,
-        # but for now, just clearing markers is fine.
 
 
     def _update_legend(self):
@@ -382,55 +417,97 @@ class PhasePlotWidget(QWidget):
     def update_marker(self, tick_index):
         self.last_tick_index = tick_index
 
-        valid_points = []
-        if self._traces: # Only proceed if there are traces
-            for label in self._traces:
-                point_data = label.phase_plot_item.get_data_at_tick(tick_index)
-                if point_data is not None:
-                    valid_points.append(point_data) # Store as (x,y) tuples
+        # Hide all existing markers first
+        for trace_id, marker_items in self.trace_markers.items():
+            if self.current_marker_type == "Crosshairs":
+                if 'crosshair_h' in marker_items:
+                    marker_items['crosshair_h'].hide()
+                if 'crosshair_v' in marker_items:
+                    marker_items['crosshair_v'].hide()
+            else:
+                if 'scatter' in marker_items:
+                    marker_items['scatter'].setData(spots=[])
 
-        # Hide all markers initially
-        if self.cursor_marker_item:
-            self.cursor_marker_item.setData(spots=[]) # Clear data to hide
-        if self.cursor_crosshair_h:
-            self.cursor_crosshair_h.hide()
-        if self.cursor_crosshair_v:
-            self.cursor_crosshair_v.hide()
-
-        if not valid_points: # No valid points at this tick_index for any trace
+        if not self._traces:
             return
 
-        # Marker Type Handling
-        if self.current_marker_type == "Crosshairs":
-            if self.cursor_crosshair_h is None or self.cursor_crosshair_v is None:
-                # Use only RGB for pen color, alpha is not typically used for InfiniteLine pen
-                crosshair_pen = pg.mkPen(color=self.current_marker_color_tuple[:3], width=1)
-                self.cursor_crosshair_h = pg.InfiniteLine(angle=0, movable=False, pen=crosshair_pen)
-                self.cursor_crosshair_v = pg.InfiniteLine(angle=90, movable=False, pen=crosshair_pen)
-                self.plot_widget.addItem(self.cursor_crosshair_h, ignoreBounds=True)
-                self.plot_widget.addItem(self.cursor_crosshair_v, ignoreBounds=True)
+        # Process each trace individually
+        for trace_idx, label in enumerate(self._traces):
+            # Check if trace is hidden (uses the _hidden attribute from CustomPlotItem)
+            trace_is_hidden = getattr(label, '_hidden', False)
 
-            # Use the first point in valid_points for crosshair position
-            primary_point = valid_points[0] # This is an (x,y) tuple
-            self.cursor_crosshair_h.setPos(primary_point[1]) # Horizontal line at Y value
-            self.cursor_crosshair_v.setPos(primary_point[0]) # Vertical line at X value
-            self.cursor_crosshair_h.show()
-            self.cursor_crosshair_v.show()
-        else: # Scatter plot markers ("Circle", "Square", etc.)
-            symbol_map = {"Circle": "o", "Square": "s"} # Add more if needed (e.g. "Star": "*", "Plus": "+", "Triangle": "t")
-            actual_symbol = symbol_map.get(self.current_marker_type, "o") # Default to circle
+            # Skip if cursor should be hidden (either trace is hidden OR cursor is explicitly hidden)
+            if trace_is_hidden or not label.cursor_visible:
+                continue
 
-            if self.cursor_marker_item is None:
-                self.cursor_marker_item = pg.ScatterPlotItem(pen=pg.mkPen(None)) # No border pen for markers
-                self.plot_widget.addItem(self.cursor_marker_item)
+            point_data = label.phase_plot_item.get_data_at_tick(tick_index)
+            if point_data is None:
+                continue
 
-            self.cursor_marker_item.setSize(self.current_marker_size)
-            self.cursor_marker_item.setBrush(pg.mkBrush(*self.current_marker_color_tuple))
+            trace_id = id(label)  # Use object id as unique trace identifier
 
-            # Prepare spots data with the correct symbol for all points
-            spots_data = [{'pos': p, 'symbol': actual_symbol, 'data': 1} for p in valid_points]
-            self.cursor_marker_item.setData(spots=spots_data)
-            # ScatterPlotItem is automatically shown when data is set.
+            # Initialize marker items for this trace if needed
+            if trace_id not in self.trace_markers:
+                self.trace_markers[trace_id] = {}
+
+            # Handle different marker types
+            if self.current_marker_type == "Crosshairs":
+                self._update_crosshair_marker(trace_id, point_data)
+            else:
+                self._update_scatter_marker(trace_id, point_data)
+
+    def _update_crosshair_marker(self, trace_id, point_data):
+        """Update crosshair marker for a specific trace"""
+        marker_items = self.trace_markers[trace_id]
+        crosshair_pen = pg.mkPen(color=self.current_marker_color_tuple[:3], width=1)
+
+        # Create or update horizontal crosshair
+        if 'crosshair_h' not in marker_items:
+            marker_items['crosshair_h'] = pg.InfiniteLine(angle=0, movable=False, pen=crosshair_pen)
+            self.plot_widget.addItem(marker_items['crosshair_h'], ignoreBounds=True)
+        else:
+            marker_items['crosshair_h'].setPen(crosshair_pen)
+            # Remove and re-add to ensure it's on top
+            self.plot_widget.removeItem(marker_items['crosshair_h'])
+            self.plot_widget.addItem(marker_items['crosshair_h'], ignoreBounds=True)
+
+        # Create or update vertical crosshair
+        if 'crosshair_v' not in marker_items:
+            marker_items['crosshair_v'] = pg.InfiniteLine(angle=90, movable=False, pen=crosshair_pen)
+            self.plot_widget.addItem(marker_items['crosshair_v'], ignoreBounds=True)
+        else:
+            marker_items['crosshair_v'].setPen(crosshair_pen)
+            # Remove and re-add to ensure it's on top
+            self.plot_widget.removeItem(marker_items['crosshair_v'])
+            self.plot_widget.addItem(marker_items['crosshair_v'], ignoreBounds=True)
+
+        # Position crosshairs
+        marker_items['crosshair_h'].setPos(point_data[1])  # Horizontal line at Y value
+        marker_items['crosshair_v'].setPos(point_data[0])  # Vertical line at X value
+        marker_items['crosshair_h'].show()
+        marker_items['crosshair_v'].show()
+
+    def _update_scatter_marker(self, trace_id, point_data):
+        """Update scatter marker for a specific trace"""
+        marker_items = self.trace_markers[trace_id]
+        symbol_map = {"Circle": "o", "Square": "s"}
+        actual_symbol = symbol_map.get(self.current_marker_type, "o")
+
+        # Create or update scatter plot item
+        if 'scatter' not in marker_items:
+            marker_items['scatter'] = pg.ScatterPlotItem(pen=pg.mkPen(None))
+            self.plot_widget.addItem(marker_items['scatter'])
+        else:
+            # Remove and re-add to ensure it's on top
+            self.plot_widget.removeItem(marker_items['scatter'])
+            self.plot_widget.addItem(marker_items['scatter'])
+
+        marker_items['scatter'].setSize(self.current_marker_size)
+        marker_items['scatter'].setBrush(pg.mkBrush(*self.current_marker_color_tuple))
+
+        # Set the single point data
+        spots_data = [{'pos': point_data, 'symbol': actual_symbol, 'data': 1}]
+        marker_items['scatter'].setData(spots=spots_data)
 
     def set_marker_style(self, marker_type=None, size=None, color_tuple=None):
         """
@@ -453,6 +530,24 @@ class PhasePlotWidget(QWidget):
         # else: keep the current_marker_color_tuple (e.g. (255,0,0,120) or allow future setting)
 
         # Apply changes immediately by refreshing the marker display
+        self.update_marker(self.last_tick_index)
+
+    def update_marker_settings_from_preferences(self):
+        """Update marker settings from QSettings and refresh display"""
+        settings = QSettings()
+
+        # Update marker type
+        self.current_marker_type = settings.value("phase_plot/default_marker_type", "Circle")
+
+        # Update marker size
+        self.current_marker_size = int(settings.value("phase_plot/default_marker_size", 10))
+
+        # Update marker color
+        default_color = settings.value("phase_plot/marker_color", "0,0,0,200")
+        color_parts = [int(x) for x in default_color.split(',')]
+        self.current_marker_color_tuple = tuple(color_parts)
+
+        # Refresh the marker display with new settings
         self.update_marker(self.last_tick_index)
 
     def autoscale_plot(self):

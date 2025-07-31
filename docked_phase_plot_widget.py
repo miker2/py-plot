@@ -150,6 +150,13 @@ class DockedPhasePlotWidget(DockedWidget):
             self.add_phase_plot_tab(name="Default Phase Plot")
         # DockedWidget's _read_settings calls self.settings.endGroup()
 
+    def update_all_marker_settings(self):
+        """Update marker settings for all phase plot widgets in all tabs"""
+        for i in range(self.tabs.count()):
+            phase_plot_widget = self.tabs.widget(i)
+            if hasattr(phase_plot_widget, 'update_marker_settings_from_preferences'):
+                phase_plot_widget.update_marker_settings_from_preferences()
+
     # closeEvent is handled by DockedWidget, which calls _write_settings.
     # Child QWidgets (QTabWidget, PhasePlotWidgets) are managed by Qt's
     # parent-child hierarchy for deletion when DockedPhasePlotWidget is closed.

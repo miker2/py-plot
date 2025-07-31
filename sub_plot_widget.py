@@ -202,3 +202,12 @@ class SubPlotWidget(QWidget):
         cb = QApplication.clipboard()
         cb.setPixmap(self.grab())
         print("Plot copied to clipboard.")
+
+    def update_cursor_settings(self):
+        """Update cursor appearance from settings"""
+        from PyQt5.QtCore import QSettings
+        settings = QSettings()
+        cursor_color = settings.value("cursor/color", "black")
+        cursor_width = int(settings.value("cursor/width", 2))
+        pen = pg.mkPen(color=cursor_color, width=cursor_width)
+        self.cursor.setPen(pen)

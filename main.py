@@ -358,7 +358,7 @@ class PyPlot(QMainWindow):
         if show_text_log:
             self.show_text_logs_action.setChecked(True)
             self.create_or_destroy_text_log_widget(True)
-        
+
         show_phase_plot = bool(int(self._settings.value("show_phase_plot", 0)))
         if show_phase_plot:
             if self.show_phase_plot_action: # Ensure action exists
@@ -431,6 +431,11 @@ class PyPlot(QMainWindow):
         prefs = PreferencesDialog(parent=self)
         if prefs.exec():
             prefs.saveSettings()
+            # Update all existing plot widgets with new settings
+            self.plot_manager.update_all_cursor_settings()
+            # Update phase plot markers if phase plot widget exists
+            if self.phase_plot_widget and hasattr(self.phase_plot_widget, 'update_all_marker_settings'):
+                self.phase_plot_widget.update_all_marker_settings()
 
     def save_plotlist(self):
         dir = self._get_last_dir("last_plotlist_dir")

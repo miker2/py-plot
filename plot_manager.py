@@ -87,6 +87,13 @@ class PlotManager(QWidget):
     def add_subplot(self):
         self.tabs.currentWidget().add_subplot()
 
+    def update_all_cursor_settings(self):
+        """Update cursor settings for all SubPlotWidgets in all tabs"""
+        for i in range(self.tabs.count()):
+            plot_area_widget = self.tabs.widget(i)
+            if hasattr(plot_area_widget, 'update_all_cursor_settings'):
+                plot_area_widget.update_all_cursor_settings()
+
     def handle_key_press(self, event):
         """
         This is the main keypress event handler. It will handle distribution of the various
@@ -298,6 +305,14 @@ class PlotAreaWidget(QWidget):
 
     def _get_plot(self, idx):
         return self.plot_area.itemAt(idx).widget()
+
+    def update_all_cursor_settings(self):
+        """Update cursor settings for all SubPlotWidgets"""
+        n_plots = self.plot_area.count()
+        for i in range(n_plots):
+            plot_widget = self._get_plot(i)
+            if hasattr(plot_widget, 'update_cursor_settings'):
+                plot_widget.update_cursor_settings()
 
     def get_plot_info(self):
         n_plots = self.plot_area.count()
