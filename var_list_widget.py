@@ -5,7 +5,7 @@ from PyQt5.QtGui import QDrag, QKeyEvent
 from PyQt5.QtCore import Qt, pyqtSignal, QMimeData
 
 import pickle
-from data_model import DataModel
+from data_model import DataModel, SeparatorItem
 from logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -64,10 +64,25 @@ class VarListWidget(QListView):
         return super().close()
 
     def _update_idx(self):
-        if self.parent().count() == 1:
-            self._idx = None
+        # Navigate up the widget hierarchy to find the DataFileWidget
+        parent = self.parent()
+        while parent and not hasattr(parent, 'tabs'):
+            parent = parent.parent()
+
+        if parent and hasattr(parent, 'tabs'):
+            if parent.tabs.count() == 1:
+                self._idx = None
+            else:
+                # Find which tab contains this VarListWidget
+                for i in range(parent.tabs.count()):
+                    tab_widget = parent.tabs.widget(i)
+                    if hasattr(tab_widget, 'layout') and tab_widget.layout():
+                        var_list = tab_widget.layout().itemAt(1).widget()
+                        if var_list == self:
+                            self._idx = i + 1
+                            break
         else:
-            self._idx = self.parent().indexOf(self) + 1
+            self._idx = None
 
     def item_clicked(self, index):
         QMessageBox.information(self, "ListWidget",
@@ -102,6 +117,11 @@ class VarListWidget(QListView):
             return
 
         selected = self.model().data(index, Qt.UserRole)
+
+        # Don't allow dragging separator items
+        if isinstance(selected, SeparatorItem):
+            return
+
         selected._time = self.model().time
 
         bstream = pickle.dumps(selected)
@@ -112,3 +132,15 @@ class VarListWidget(QListView):
         drag.setMimeData(mime_data)
 
         result = drag.exec()
+
+    def selectionChanged(self, selected, deselected):
+        """Override selection to prevent selecting separator items"""
+        # Check if any of the newly selected items are separators
+        for index in selected.indexes():
+            item = self.model().data(index, Qt.UserRole)
+            if isinstance(item, SeparatorItem):
+                # Don't allow selection of separator items
+                self.selectionModel().select(index, self.selectionModel().Deselect)
+                return
+
+        super().selectionChanged(selected, deselected)

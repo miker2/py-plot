@@ -170,12 +170,18 @@ class DataModel(QAbstractListModel):
         if self._show_derived:
             self._refresh_data_list()
 
+        # Update checkbox state if available
+        self._update_checkbox_if_available()
+
     def remove_derived_variable(self, name):
         """Remove a derived variable from this model"""
         if name in self._derived_data:
             del self._derived_data[name]
             if self._show_derived:
                 self._refresh_data_list()
+
+            # Update checkbox state if available
+            self._update_checkbox_if_available()
 
     def set_show_derived(self, show_derived):
         """Control whether derived variables are shown in the list"""
@@ -200,3 +206,9 @@ class DataModel(QAbstractListModel):
                 self._data.append(self._derived_data[var])
 
         self.endResetModel()
+
+    def _update_checkbox_if_available(self):
+        """Update checkbox state if checkbox reference is available"""
+        # This will be set by DataFileWidget when creating the UI
+        if hasattr(self, '_checkbox_update_callback') and self._checkbox_update_callback:
+            self._checkbox_update_callback()
