@@ -41,14 +41,6 @@ class DockedMathsWidget(DockedWidget):
         self.setWidget(MathsWidget(parent=self))
 
 
-class ThinModelMock:
-    # TODO(rose@): Once the plotting stuff is unified, this can be removed, but for now it's
-    # required for plotting math-derived variables.
-    def __init__(self, parent):
-        self.parent = parent
-
-    def get_data_by_name(self, name):
-        return self.parent.get_data_by_name(name)
 
 
 # Convenience method for storing info about math-derived variables. This could be incorporated
@@ -107,8 +99,6 @@ class MathsWidget(QWidget):
 
         # We'll be lazy for now and store data in this dictionary. We'll fix this later.
         self._vars = {}
-
-        self._silly_model = ThinModelMock(self)
 
         self.parser = Parser()
         # We need to overwrite some of the functionality so that it works for our numpy arrays:
@@ -305,21 +295,3 @@ class MathsWidget(QWidget):
         drag.setMimeData(mime_data)
 
         result = drag.exec()
-
-    ######################### THE CODE BELOW THIS LINE SHOULDN'T EXIST!!! ####################
-    def model(self):
-        # TODO(rose@): Fix this hack! For now, redirect the model to our mocked model.
-        return self._silly_model
-
-    def get_data_by_name(self, name):
-        # TODO(rose@): This is a bit of a hack in order to make drag/drop plotting work.
-        # If we decide to keep this, the model should be formalized.
-        data = None
-        # Make a lookup of the variable names... oi vey
-        v_lookup = {v.var_name: k for k, v in self._vars.items()}
-        try:
-            vid = v_lookup[name]
-            data = self._vars[vid].data
-        except KeyError:
-            logger.warning(f"Unknown key: {name}")
-        return data
