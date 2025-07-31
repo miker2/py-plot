@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QLabel,
 from data_file_widget import DataFileWidget
 from plot_manager import PlotManager
 from visualizer_3d_widget import DockedVisualizer3DWidget
+from docked_phase_plot_widget import DockedPhasePlotWidget # Added for Phase Plot
 from logging_config import setup_logging, get_logger
 
 _visualizer_available = True
@@ -74,6 +75,8 @@ class PyPlot(QMainWindow):
         self.show_text_logs_action = None
         self.maths_widget_action = None
         self.visualizer_3d_action = None
+        self.show_phase_plot_action = None # Added for Phase Plot
+        self.phase_plot_widget = None # Added for Phase Plot
 
         q_splitter = QSplitter(self)
         q_splitter.setObjectName("qSplitter")
@@ -209,6 +212,39 @@ class PyPlot(QMainWindow):
         self.show_text_logs_action.triggered.connect(self.create_or_destroy_text_log_widget)
         tool_menu.addAction(self.show_text_logs_action)
 
+        tool_menu.addSeparator() # Optional: separate generic tools from plot-specific tools
+
+        self.show_phase_plot_action = QAction("Show Phase Plots", self)
+        self.show_phase_plot_action.setStatusTip("Show the phase plot widget")
+        self.show_phase_plot_action.setCheckable(True)
+        self.show_phase_plot_action.triggered.connect(self.create_or_destroy_phase_plot_widget)
+        tool_menu.addAction(self.show_phase_plot_action)
+
+    def create_or_destroy_phase_plot_widget(self, is_checked):
+        if is_checked:
+            if not self.phase_plot_widget:
+                # Pass the plot_manager and data_file_widget instances
+                self.phase_plot_widget = DockedPhasePlotWidget(
+                    parent=self,
+                    plot_manager_instance=self.plot_manager,
+                    data_file_widget_instance=self.data_file_widget
+                )
+                self.addDockWidget(Qt.RightDockWidgetArea, self.phase_plot_widget) # Or another default area
+
+                # Define a slot to handle the onClose signal from DockedPhasePlotWidget
+                @pyqtSlot()
+                def on_phase_plot_closed():
+                    self.show_phase_plot_action.setChecked(False)
+                    # self.phase_plot_widget.deleteLater() # DockedWidget base class should handle this if closed by 'x'
+                    self.phase_plot_widget = None
+
+                self.phase_plot_widget.onClose.connect(on_phase_plot_closed)
+            else:
+                self.phase_plot_widget.show()
+        else:
+            if self.phase_plot_widget: # Check if it exists
+                self.phase_plot_widget.hide()
+
     def setup_help_menu(self):
         main_menu = self.menuBar()
         help_menu = main_menu.addMenu('&Help')
@@ -312,6 +348,8 @@ class PyPlot(QMainWindow):
                                                  self.maths_widget.isHidden())))
         settings.setValue("show_text_log", int(not (self.text_log_widget is None or
                                                     self.text_log_widget.isHidden())))
+        settings.setValue("show_phase_plot", int(not (self.phase_plot_widget is None or
+                                                      self.phase_plot_widget.isHidden())))
         settings.endGroup()
 
         settings.sync()
@@ -340,6 +378,14 @@ class PyPlot(QMainWindow):
             self.show_text_logs_action.setChecked(True)
             self.create_or_destroy_text_log_widget(True)
 
+        show_phase_plot = bool(int(self._settings.value("show_phase_plot", 0)))
+        if show_phase_plot:
+            if self.show_phase_plot_action: # Ensure action exists
+                self.show_phase_plot_action.setChecked(True)
+            # This will create the widget, and its own _read_settings will be called by DockedWidget constructor
+            self.create_or_destroy_phase_plot_widget(True)
+
+
         self._settings.endGroup()
 
     def closeEvent(self, event):
@@ -351,6 +397,8 @@ class PyPlot(QMainWindow):
             self.maths_widget.close()
         if self.text_log_widget:
             self.text_log_widget.close()
+        if self.phase_plot_widget:
+            self.phase_plot_widget.close() # This will trigger its _write_settings
 
         event.accept()
 
@@ -402,6 +450,11 @@ class PyPlot(QMainWindow):
         prefs = PreferencesDialog(parent=self)
         if prefs.exec():
             prefs.saveSettings()
+            # Update all existing plot widgets with new settings
+            self.plot_manager.update_all_cursor_settings()
+            # Update phase plot markers if phase plot widget exists
+            if self.phase_plot_widget and hasattr(self.phase_plot_widget, 'update_all_marker_settings'):
+                self.phase_plot_widget.update_all_marker_settings()
 
     def save_plotlist(self):
         dir = self._get_last_dir("last_plotlist_dir")
