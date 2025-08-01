@@ -491,6 +491,7 @@ class SubPlotWidget(QWidget):
         # Connect signals for the new label
         # Time changed connection is fine
         self.parent().plot_manager().timeValueChanged.connect(label.on_time_changed)
+        source.timeChanged.connect(label.on_source_time_changed)
 
         # Conditionally connect onClose for the source
         if hasattr(source, 'onClose') and callable(getattr(source, 'onClose', None)):
@@ -517,6 +518,9 @@ class SubPlotWidget(QWidget):
         # is_move_operation: True if this item is being moved to another plot
 
         logger.debug(f"remove_item called for label '{label.text()}' in subplot '{self.objectName()}', is_move_operation={is_move_operation}")
+
+        # Disconnect the timeChanged signal
+        label.source.timeChanged.disconnect(label.on_source_time_changed)
 
         # Remove from pyqtgraph plot
         self.pw.removeItem(trace)

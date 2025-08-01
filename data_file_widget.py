@@ -211,19 +211,23 @@ class DataFileWidget(QWidget):
         tab_widget = self.tabs.widget(idx)
         var_list = self._get_var_list_from_tab(tab_widget)
 
+        initial_offset = var_list.time_offset
+
         # Create a dialog box for getting user input. This can be created on the fly.
         time_offset_dialog = QDialog(tab_widget)
+        time_offset_dialog.setModal(False)  # Make it non-modal
+
         form = QFormLayout(time_offset_dialog)
+
         # Add manual user input dialog box
         time_offset_spin = QDoubleSpinBox()
         time_offset_spin.setDecimals(3)
         time_offset_spin.setSingleStep(0.001)
-        # The range must be set before the `setValue` call, otherwise the value might be
-        # out of range and truncated.
         time_offset_spin.setRange(-float("inf"), float("inf"))
         time_offset_spin.setSuffix(" sec")
-        time_offset_spin.setValue(var_list.time_offset)
+        time_offset_spin.setValue(initial_offset)
         form.addRow("time offset:", time_offset_spin)
+
         # Adds an option that allows the user to set the first time value to zero.
         start_zero_check_box = QCheckBox("start at zero")
         form.addRow(start_zero_check_box)
@@ -231,18 +235,42 @@ class DataFileWidget(QWidget):
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
                                       Qt.Horizontal, time_offset_dialog)
         form.addRow(button_box)
-        button_box.accepted.connect(time_offset_dialog.accept)
-        button_box.rejected.connect(time_offset_dialog.reject)
 
-        # Show the dialog as modal
-        if time_offset_dialog.exec() == QDialog.Accepted:
+        # --- Signal Connections for Live Update ---
+
+        def update_offset():
             if start_zero_check_box.isChecked():
+                # Disable spin box when checkbox is checked
+                time_offset_spin.setEnabled(False)
                 t_offset = -var_list.time_range[0]
+                # Update spinbox to reflect the change, without emitting a new signal
+                time_offset_spin.blockSignals(True)
+                time_offset_spin.setValue(t_offset)
+                time_offset_spin.blockSignals(False)
+                var_list.set_time_offset(t_offset)
             else:
-                t_offset = time_offset_spin.value()
+                # Re-enable spin box
+                time_offset_spin.setEnabled(True)
+                var_list.set_time_offset(time_offset_spin.value())
 
-            var_list.set_time_offset(t_offset)
-        # If user cancels, nothing changes.
+        # Connect signals
+        time_offset_spin.valueChanged.connect(update_offset)
+        start_zero_check_box.stateChanged.connect(update_offset)
+
+        def on_accept():
+            # Final value is already set by the live updates, just close the dialog.
+            time_offset_dialog.accept()
+
+        def on_reject():
+            # User cancelled, so restore the original offset.
+            var_list.set_time_offset(initial_offset)
+            time_offset_dialog.reject()
+
+        button_box.accepted.connect(on_accept)
+        button_box.rejected.connect(on_reject)
+
+        # Show the dialog
+        time_offset_dialog.show()
 
 
 class FileLoader:
