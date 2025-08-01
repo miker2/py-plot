@@ -73,6 +73,9 @@ class DataFileWidget(QWidget):
             return
         var_list = VarListWidget(self, loader)
 
+        if loader.time_offset != 0.0:
+            var_list.set_time_offset(loader.time_offset)
+
         # Create a container widget with checkbox and var_list
         tab_widget = QWidget()
         tab_layout = QVBoxLayout(tab_widget)
@@ -248,6 +251,7 @@ class FileLoader:
         self._time = None
         self._df = None
         self._supervisor_log = False
+        self.time_offset = 0.0
 
     @property
     def success(self):
@@ -334,6 +338,10 @@ def time_selector_dialog(caller, df):
     hbox.addStretch()
     form.addRow("Create time variable:", hbox)
 
+    start_zero_check_box = QCheckBox("Start time at 0")
+    start_zero_check_box.setToolTip("If checked, the time vector will be offset so that it starts at 0.")
+    form.addRow(start_zero_check_box)
+
     # Add some standard buttons (Cancel/Ok) at the bottom of the dialog
     button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
                                   Qt.Horizontal, dialog)
@@ -358,9 +366,12 @@ def time_selector_dialog(caller, df):
                 QMessageBox.warning(caller, "Non-monotonic time variable",
                                     f"WARNING: Selected time variable '{item}' (after scaling) is not " +
                                     "monotonically increasing!")
-        return True, time
+        time_offset = 0.0
+        if start_zero_check_box.isChecked():
+            time_offset = -time.iloc[0]
+        return True, time, time_offset
     else:
-        return False, None
+        return False, None, 0.0
 
 
 def _is_supervisor_log(filename, df):
@@ -382,9 +393,10 @@ class BinaryFileLoader(FileLoader):
 
         except KeyError:
             # Log file doesn't have one of the expected time variables, so ask the user to pick one.
-            ok, time = time_selector_dialog(caller, self._df)
+            ok, time, offset = time_selector_dialog(caller, self._df)
             if ok:
                 self._time = time
+                self.time_offset = offset
             else:
                 QMessageBox.critical(caller, "Unable to load .bin file",
                                      "No time series selected. Unable to finish loading data.")
@@ -416,9 +428,10 @@ class GenericCSVLoader(FileLoader):
                 self._time = self._df['time_ns'].astype(np.float64, copy=True) * 1e-9
         except KeyError:
             # Ask the user which column to use for time
-            ok, time = time_selector_dialog(caller, self._df)
+            ok, time, offset = time_selector_dialog(caller, self._df)
             if ok:
                 self._time = time
+                self.time_offset = offset
             else:
                 QMessageBox.critical(caller, "Unable to load file",
                                      "No time series selected. Unable to finish loading data.")
@@ -436,9 +449,10 @@ class ParquetLoader(FileLoader):
                 self._time = self._df['time']
             except KeyError:
                 # Parquet log doesn't have one of the expected time variables, so ask the user for one.
-                ok, time = time_selector_dialog(caller, self._df)
+                ok, time, offset = time_selector_dialog(caller, self._df)
                 if ok:
                     self._time = time
+                    self.time_offset = offset
                 else:
                     QMessageBox.critical(caller, "Unable to load parquet file",
                                                  "No time series selected. Unable to finish loading data.")
