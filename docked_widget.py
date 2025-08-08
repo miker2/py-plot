@@ -59,7 +59,8 @@ class DockedWidget(QDockWidget):
             self.move(self._undocked_pos)
             self.resize(self._undocked_size)
         else:
-            self.widget().resize(self._docked_size)
+            if self.widget() is not None:
+                self.widget().resize(self._docked_size)
 
     def moveEvent(self, event):
         if self._settings is not None:
@@ -72,7 +73,7 @@ class DockedWidget(QDockWidget):
         super().moveEvent(event)
 
     def resizeEvent(self, event):
-        if self._settings is not None:
+        if self._settings is not None and self.widget() is not None:
             # Capture the size of the widget when it changes so that we can restore
             # the proper size on dock/undock events
             if self.isFloating():

@@ -44,7 +44,9 @@ class FilterBoxWidget(QWidget):
         if self.df_widget.count() > 0 and self.search_box.text():
             # print(f"Active tab is {self.df_widget.currentWidget().filename}")
 
-            list_view = self.df_widget.currentWidget()
+            tab_widget = self.df_widget.currentWidget()
+            # Get the VarListWidget from the container
+            list_view = tab_widget.var_list
             model = list_view.model()
 
             selected = list_view.currentIndex()
@@ -65,7 +67,7 @@ class FilterBoxWidget(QWidget):
             if matches:
                 for m in matches:
                     if m != list_view.currentIndex():
-                        self.df_widget.currentWidget().setCurrentIndex(m)
+                        list_view.setCurrentIndex(m)
                         break
 
     def clear_text(self):

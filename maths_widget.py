@@ -41,14 +41,6 @@ class DockedMathsWidget(DockedWidget):
         self.setWidget(MathsWidget(parent=self))
 
 
-class ThinModelMock:
-    # TODO(rose@): Once the plotting stuff is unified, this can be removed, but for now it's
-    # required for plotting math-derived variables.
-    def __init__(self, parent):
-        self.parent = parent
-
-    def get_data_by_name(self, name):
-        return self.parent.get_data_by_name(name)
 
 
 # Convenience method for storing info about math-derived variables. This could be incorporated
@@ -107,8 +99,6 @@ class MathsWidget(QWidget):
 
         # We'll be lazy for now and store data in this dictionary. We'll fix this later.
         self._vars = {}
-
-        self._silly_model = ThinModelMock(self)
 
         self.parser = Parser()
         # We need to overwrite some of the functionality so that it works for our numpy arrays:
@@ -225,14 +215,29 @@ class MathsWidget(QWidget):
             logger.error(f"Some sort of error! -- {ex}")
             return
 
-        vname = self.math_entry.text()
+        # Generate default name and get user input with conflict checking
+        default_vname = self.math_entry.text()
         for v in e_vars:
-            vname = vname.replace(v, self._vars[v].var_name)
-        vname = vname.replace(' ', '')
-        vname, accept = QInputDialog.getText(self, "Enter variable name", "Variable name:",
-                                             text=vname)
-        if not accept:
-            return
+            default_vname = default_vname.replace(v, self._vars[v].var_name)
+        default_vname = default_vname.replace(' ', '')
+
+        source_model = self._vars[e_vars[0]].source.model()
+
+        # Loop until user provides a unique name or cancels
+        while True:
+            vname, accept = QInputDialog.getText(self, "Enter variable name", "Variable name:",
+                                                 text=default_vname)
+            if not accept:
+                return
+
+            # Check for name conflicts
+            if source_model.has_variable(vname):
+                QMessageBox.warning(self, "Name Conflict",
+                                  f"Variable name '{vname}' already exists.\nPlease choose a different name.")
+                default_vname = vname  # Keep user's input as default for next attempt
+                continue
+            else:
+                break  # Name is unique, proceed
 
         # Clear the math entry box when the formula is evaluated successfully.
         self.math_entry.clear()
@@ -245,17 +250,31 @@ class MathsWidget(QWidget):
         self.add_new_var(data_item, self._vars[e_vars[0]].source)
 
     def add_new_var(self, data_item, source):
+        # Add the derived variable to the source file's DataModel
+        # This is the clean architecture - derived variables belong to their source file
+        source.model().add_derived_variable(data_item.var_name, data_item.data)
+        logger.debug(f"Added derived variable '{data_item.var_name}' to source DataModel")
+
+        # Create UI item in math widget (visual display unchanged)
         list_name = f"y{self.var_out.count()}"
         new_item = QListWidgetItem(f"{list_name}: {data_item.var_name}")
         new_item.setData(Qt.UserRole, data_item)
         new_item.setData(Qt.ToolTipRole, list_name)
         self.var_out.addItem(new_item)
-        # User can use output vars as inputs also.
+
+        # Store locally for math widget management (use original source, not self)
+        # Now the source will be able to find the variable via its DataModel
         self._vars[list_name] = VarInfo(data_item.var_name, data_item.data, source)
 
-        # TODO(rose@) - Remove this variable from self._vars also.
+        # Clean up derived variable when source closes
         remove_row = lambda: self.var_out.takeItem(self.var_out.row(new_item))
-        source.onClose.connect(remove_row)
+        remove_derived = lambda: source.model().remove_derived_variable(data_item.var_name)
+
+        def cleanup():
+            remove_row()
+            remove_derived()
+
+        source.onClose.connect(cleanup)
 
     def start_drag(self, e):
         index = self.var_out.currentRow()
@@ -266,30 +285,13 @@ class MathsWidget(QWidget):
         mime_data = QMimeData()
         mime_data.setData("application/x-DataItem", bstream)
 
+        # Get the original source for this derived variable
         vid = self.var_out.item(index).data(Qt.ToolTipRole)
-        # NOTE(rose@) These feel like dirty little hacks, but they do work (for now).
-        setattr(self, 'onClose', self._vars[vid].source.onClose)
-        setattr(self, 'time', self._vars[vid].source.time)
-        setattr(self, 'idx', self._vars[vid].source.idx)
-        drag = QDrag(self)
+        original_source = self._vars[vid].source
+
+        # Use the original source as the drag source instead of self
+        # This way plots will get the proper VarListWidget with all expected attributes
+        drag = QDrag(original_source)
         drag.setMimeData(mime_data)
 
         result = drag.exec()
-
-    ######################### THE CODE BELOW THIS LINE SHOULDN'T EXIST!!! ####################
-    def model(self):
-        # TODO(rose@): Fix this hack! For now, redirect the model to our mocked model.
-        return self._silly_model
-
-    def get_data_by_name(self, name):
-        # TODO(rose@): This is a bit of a hack in order to make drag/drop plotting work.
-        # If we decide to keep this, the model should be formalized.
-        data = None
-        # Make a lookup of the variable names... oi vey
-        v_lookup = {v.var_name: k for k, v in self._vars.items()}
-        try:
-            vid = v_lookup[name]
-            data = self._vars[vid].data
-        except KeyError:
-            logger.warning(f"Unknown key: {name}")
-        return data

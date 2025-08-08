@@ -56,6 +56,10 @@ class DataFileWidget(QWidget):
         self.sources = dict()
         self.latest_data_file_name = None
 
+    def _get_var_list_from_tab(self, tab_widget):
+        """Helper to extract VarListWidget from tab container"""
+        return tab_widget.var_list
+
     @property
     def open_count(self):
         return self.tabs.count()
@@ -68,12 +72,47 @@ class DataFileWidget(QWidget):
             # File didn't finish loading. Nothing else to do.
             return
         var_list = VarListWidget(self, loader)
+
+        # Create a container widget with checkbox and var_list
+        tab_widget = QWidget()
+        tab_layout = QVBoxLayout(tab_widget)
+        tab_layout.setContentsMargins(2, 2, 2, 2)  # Small margins
+        tab_layout.setSpacing(2)  # Small spacing
+
+        # Store direct reference to VarListWidget on the container
+        tab_widget.var_list = var_list
+
+        # Add checkbox for derived variables toggle
+        derived_checkbox = QCheckBox("Show derived variables")
+        derived_checkbox.setChecked(var_list.model()._show_derived)
+        derived_checkbox.toggled.connect(var_list.model().set_show_derived)
+
+        # Only enable checkbox if there are derived variables
+        derived_checkbox.setEnabled(len(var_list.model()._derived_data) > 0)
+
+        # Update checkbox state when derived variables are added/removed
+        def update_checkbox_state():
+            has_derived = len(var_list.model()._derived_data) > 0
+            derived_checkbox.setEnabled(has_derived)
+            if not has_derived:
+                derived_checkbox.setChecked(False)
+
+        # Connect to model changes (we'll need to call this when derived vars change)
+        var_list._derived_checkbox = derived_checkbox  # Store reference for updates
+        var_list._update_checkbox = update_checkbox_state
+
+        # Set callback in the model so it can update the checkbox
+        var_list.model()._checkbox_update_callback = update_checkbox_state
+
+        tab_layout.addWidget(derived_checkbox)
+        tab_layout.addWidget(var_list)
+
         tab_name = os.path.basename(filepath)
-        # Create a new tab and add the varListWidget to it.
+        # Create a new tab and add the container widget to it.
         self.latest_data_file_name = filepath
-        self.tabs.addTab(var_list, tab_name)
-        self.sources[filepath] = self.tabs.widget(self.tabs.count() - 1)
-        self.tabs.setCurrentWidget(var_list)
+        self.tabs.addTab(tab_widget, tab_name)
+        self.sources[filepath] = var_list  # Store the VarListWidget, not the container
+        self.tabs.setCurrentWidget(tab_widget)
         self._update_range_slider()
 
         var_list.timeChanged.connect(self._update_range_slider)
@@ -84,8 +123,12 @@ class DataFileWidget(QWidget):
 
     def close_file(self, index):
         # Add function for closing the tab here.
-        filename = self.tabs.widget(index).filename
-        self.tabs.widget(index).close()
+        tab_widget = self.tabs.widget(index)
+        var_list = self._get_var_list_from_tab(tab_widget)
+
+        filename = var_list.filename
+        var_list.close()
+
         self.tabs.removeTab(index)
         if self.tabs.count() > 0:
             self._update_range_slider()
@@ -94,13 +137,15 @@ class DataFileWidget(QWidget):
         self.fileClosed[str].emit(filename)
 
     def get_active_data_file(self):
-        return self.tabs.currentWidget()
+        tab_widget = self.tabs.currentWidget()
+        return self._get_var_list_from_tab(tab_widget)
 
     def get_latest_data_file_name(self):
         return self.latest_data_file_name
 
     def get_data_file(self, idx):
-        return self.tabs.widget(idx)
+        tab_widget = self.tabs.widget(idx)
+        return self._get_var_list_from_tab(tab_widget)
 
     def get_data_file_by_name(self, name):
         return self.sources[name]
@@ -142,7 +187,9 @@ class DataFileWidget(QWidget):
         max_time = -math.inf
 
         for idx in range(self.tabs.count()):
-            t_range = self.tabs.widget(idx).time_range
+            tab_widget = self.tabs.widget(idx)
+            var_list = self._get_var_list_from_tab(tab_widget)
+            t_range = var_list.time_range
             logger.debug(f"idx: {idx} - Time range: {t_range}")
             min_time = min(min_time, t_range[0])
             max_time = max(max_time, t_range[1])
@@ -153,11 +200,16 @@ class DataFileWidget(QWidget):
 
     def _copy_to_clipboard(self, idx):
         cb = QApplication.clipboard()
-        cb.setText(self.tabs.widget(idx).filename)
+        tab_widget = self.tabs.widget(idx)
+        var_list = self._get_var_list_from_tab(tab_widget)
+        cb.setText(var_list.filename)
 
     def _set_time_offset(self, idx):
+        tab_widget = self.tabs.widget(idx)
+        var_list = self._get_var_list_from_tab(tab_widget)
+
         # Create a dialog box for getting user input. This can be created on the fly.
-        time_offset_dialog = QDialog(self.tabs.widget(idx))
+        time_offset_dialog = QDialog(tab_widget)
         form = QFormLayout(time_offset_dialog)
         # Add manual user input dialog box
         time_offset_spin = QDoubleSpinBox()
@@ -167,7 +219,7 @@ class DataFileWidget(QWidget):
         # out of range and truncated.
         time_offset_spin.setRange(-float("inf"), float("inf"))
         time_offset_spin.setSuffix(" sec")
-        time_offset_spin.setValue(self.tabs.widget(idx).time_offset)
+        time_offset_spin.setValue(var_list.time_offset)
         form.addRow("time offset:", time_offset_spin)
         # Adds an option that allows the user to set the first time value to zero.
         start_zero_check_box = QCheckBox("start at zero")
@@ -182,11 +234,11 @@ class DataFileWidget(QWidget):
         # Show the dialog as modal
         if time_offset_dialog.exec() == QDialog.Accepted:
             if start_zero_check_box.isChecked():
-                t_offset = -self.tabs.widget(idx).time_range[0]
+                t_offset = -var_list.time_range[0]
             else:
                 t_offset = time_offset_spin.value()
 
-            self.tabs.widget(idx).set_time_offset(t_offset)
+            var_list.set_time_offset(t_offset)
         # If user cancels, nothing changes.
 
 
