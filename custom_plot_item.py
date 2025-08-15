@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 
-from PyQt5.QtCore import Qt, pyqtSlot, QRect, QMimeData, QByteArray
-from PyQt5.QtWidgets import QLabel, QMenu, QAction
-from PyQt5.QtGui import QPalette, QPixmap, QPainter, QDrag
+from PyQt5.QtCore import Qt, pyqtSlot, QRect, QMimeData, QByteArray, QPoint # Added QPoint
+from PyQt5.QtWidgets import QLabel, QMenu, QAction, QApplication # QApplication moved here
+from PyQt5.QtGui import QPalette, QPixmap, QPainter, QDrag # QDrag was already here
 from logging_config import get_logger
 
-try:
-    from PyQt5.QtGui import QApplication
-except ImportError:
-    from PyQt5.QtWidgets import QApplication
+# try: # QApplication is now directly imported from QtWidgets
+#     from PyQt5.QtGui import QApplication
+# except ImportError:
+#     from PyQt5.QtWidgets import QApplication
 
 import os
 import pickle # Add pickle
@@ -34,7 +34,7 @@ class CustomPlotItem(QLabel):
 
         self.trace = plot_data_item
         self._subplot_widget = parent # Store parent reference
-        self._drag_start_position = None # Initialize drag start position
+        self.drag_start_position = QPoint() # Initialize drag start position, ensure it's QPoint
 
         self.source = source
 
@@ -181,58 +181,69 @@ class CustomPlotItem(QLabel):
             self.remove_item()
             event.accept()
         elif event.button() == Qt.LeftButton:
-            self._drag_start_position = event.pos()
+            self.drag_start_position = event.pos() # Use self.drag_start_position
         else:
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if not (event.buttons() & Qt.LeftButton) or not self._drag_start_position:
-            return
-        if (event.pos() - self._drag_start_position).manhattanLength() < QApplication.startDragDistance():
+        if not (event.buttons() & Qt.LeftButton):
+            # Call super for other mouse move events if necessary, or just return
+            super().mouseMoveEvent(event)
             return
 
+        # Check if drag_start_position is initialized and valid
+        if not hasattr(self, 'drag_start_position') or self.drag_start_position is None or self.drag_start_position.isNull():
+            super().mouseMoveEvent(event)
+            return
+
+        if (event.pos() - self.drag_start_position).manhattanLength() < QApplication.startDragDistance():
+            super().mouseMoveEvent(event)
+            return
+
+        # Start drag
+        # logger.info(f"CustomPlotItem '{self.name}': Initiating QDrag.")
         drag = QDrag(self)
         mime_data = QMimeData()
 
-        try:
-            mime_data.setText(self.trace.name())
-        except Exception as e_setText:
-            logger.error(f"MOUSE_MOVE_EVENT: Exception during setText: {e_setText}")
-            # This is where the pickling error might be if self.trace.name() is complex
-            # and indirectly tries to pickle self.source. Unlikely but possible.
+        # Set text for general purpose (e.g., if dropped on a text editor or for SubPlotWidget's text() check)
+        mime_data.setText(self.trace.name())
 
-        try:
-            if self._subplot_widget and self._subplot_widget.objectName():
-                mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray(self._subplot_widget.objectName().encode()))
-            else:
-                logger.warning("MOUSE_MOVE_EVENT: _subplot_widget or its objectName not set.")
-                mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray())
-        except Exception as e_setSourceWidget:
-            logger.exception(f"MOUSE_MOVE_EVENT: Exception during setData for sourcewidget: {e_setSourceWidget}")
+        # Set specific data for "application/x-customplotitem" format
+        # This is what SubPlotWidget's dropEvent will primarily check via hasFormat and then use text().
+        # Encoding the trace name as QByteArray for setData.
+        mime_data.setData("application/x-customplotitem", self.trace.name().encode())
 
+        # It seems SubPlotWidget.dropEvent for CustomPlotItem reordering/moving
+        # also uses e.mimeData().data("application/x-customplotitem-sourcewidget")
+        # to get the source widget's object name. This should be preserved if still used.
+        # The existing code already has this:
+        if self._subplot_widget and self._subplot_widget.objectName():
+            mime_data.setData("application/x-customplotitem-sourcewidget",
+                              QByteArray(self._subplot_widget.objectName().encode()))
+        else:
+            # logger.warning("CustomPlotItem.mouseMoveEvent: _subplot_widget or its objectName not set.")
+            mime_data.setData("application/x-customplotitem-sourcewidget", QByteArray())
 
-        try:
-            mime_data.setData("application/x-customplotitem", QByteArray()) # The marker
-        except Exception as e_setCustomPlotItem:
-            logger.exception(f"MOUSE_MOVE_EVENT: Exception during setData for application/x-customplotitem: {e_setCustomPlotItem}")
 
         drag.setMimeData(mime_data)
 
+        # Visual feedback for the drag
         try:
-            pixmap = QPixmap(self.size())
-            self.render(pixmap)
+            pixmap = self.grab() # Grab the current appearance of the label
             drag.setPixmap(pixmap)
+            # Set the hot spot to be where the mouse click started within the label
             drag.setHotSpot(event.pos() - self.rect().topLeft())
         except Exception as e_pixmap:
-            logger.exception(f"MOUSE_MOVE_EVENT: Exception during pixmap creation/setting: {e_pixmap}")
-            # If self.render() or self.size() somehow trigger the pickle error via self.source
+            logger.exception(f"CustomPlotItem.mouseMoveEvent: Exception during pixmap creation/setting: {e_pixmap}")
 
-        try:
-            drag.exec_(Qt.MoveAction)
-        except Exception as e_drag:
-            logger.exception(f"MOUSE_MOVE_EVENT: Error during drag.exec_(): {e_drag}")
+        # logger.info(f"CustomPlotItem '{self.name}': Executing drag.")
+        drag.exec_(Qt.MoveAction)
+        # logger.info(f"CustomPlotItem '{self.name}': Drag finished.")
 
-        self._drag_start_position = None
+        # Reset drag_start_position after drag finishes, though it might be good practice
+        # to reset it in mouseReleaseEvent as well, or if the drag is cancelled.
+        # For now, this matches the original logic of setting it to None.
+        self.drag_start_position = QPoint() # Reset to an invalid/default QPoint
 
     def remove_item(self):
         self.parent().remove_item(self.trace, self)
