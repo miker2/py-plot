@@ -257,17 +257,17 @@ class DataFileWidget(QWidget):
         time_offset_spin.valueChanged.connect(update_offset)
         start_zero_check_box.stateChanged.connect(update_offset)
 
-        def on_accept():
-            # Final value is already set by the live updates, just close the dialog.
-            time_offset_dialog.accept()
-
-        def on_reject():
-            # User cancelled, so restore the original offset.
+        def restore_initial_offset():
+            # This function will be called whenever the dialog is rejected.
             var_list.set_time_offset(initial_offset)
-            time_offset_dialog.reject()
 
-        button_box.accepted.connect(on_accept)
-        button_box.rejected.connect(on_reject)
+        # Connect the dialog's buttons to its standard slots.
+        button_box.accepted.connect(time_offset_dialog.accept)
+        button_box.rejected.connect(time_offset_dialog.reject)
+
+        # Connect the dialog's rejected signal to restore the original state.
+        # This handles both clicking the "Cancel" button and closing the window.
+        time_offset_dialog.rejected.connect(restore_initial_offset)
 
         # Show the dialog
         time_offset_dialog.show()
