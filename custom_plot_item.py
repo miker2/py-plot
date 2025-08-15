@@ -69,6 +69,14 @@ class CustomPlotItem(QLabel):
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_menu)
 
+    @property
+    def source_file(self):
+        return self.source.filename
+
+    @property
+    def var_name(self):
+        return self.trace.name()
+
     def update_color(self, color_str):
         pen = pg.mkPen(color=color_str, width=CustomPlotItem.PEN_WIDTH)
         self.trace.setPen(pen)
@@ -137,6 +145,11 @@ class CustomPlotItem(QLabel):
         # print(f"on_time_changed called for {self.trace.name()} with time={time}, " + \
         #      f"corresponding tick={self._tick}")
         self.setText(self._generate_label())
+
+    @pyqtSlot()
+    def on_source_time_changed(self):
+        new_time = self.source.time
+        self.trace.setData(x=new_time, y=self.trace.yData)
 
     def enterEvent(self, event):
         super().enterEvent(event)

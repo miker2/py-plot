@@ -73,6 +73,9 @@ class DataFileWidget(QWidget):
             return
         var_list = VarListWidget(self, loader)
 
+        if loader.time_offset != 0.0:
+            var_list.set_time_offset(loader.time_offset)
+
         # Create a container widget with checkbox and var_list
         tab_widget = QWidget()
         tab_layout = QVBoxLayout(tab_widget)
@@ -208,19 +211,24 @@ class DataFileWidget(QWidget):
         tab_widget = self.tabs.widget(idx)
         var_list = self._get_var_list_from_tab(tab_widget)
 
+        initial_offset = var_list.time_offset
+
         # Create a dialog box for getting user input. This can be created on the fly.
         time_offset_dialog = QDialog(tab_widget)
+        time_offset_dialog.setModal(False)  # Make it non-modal
+
         form = QFormLayout(time_offset_dialog)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+
         # Add manual user input dialog box
         time_offset_spin = QDoubleSpinBox()
         time_offset_spin.setDecimals(3)
         time_offset_spin.setSingleStep(0.001)
-        # The range must be set before the `setValue` call, otherwise the value might be
-        # out of range and truncated.
         time_offset_spin.setRange(-float("inf"), float("inf"))
         time_offset_spin.setSuffix(" sec")
-        time_offset_spin.setValue(var_list.time_offset)
+        time_offset_spin.setValue(initial_offset)
         form.addRow("time offset:", time_offset_spin)
+
         # Adds an option that allows the user to set the first time value to zero.
         start_zero_check_box = QCheckBox("start at zero")
         form.addRow(start_zero_check_box)
@@ -228,18 +236,42 @@ class DataFileWidget(QWidget):
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
                                       Qt.Horizontal, time_offset_dialog)
         form.addRow(button_box)
+
+        # --- Signal Connections for Live Update ---
+
+        def update_offset():
+            if start_zero_check_box.isChecked():
+                # Disable spin box when checkbox is checked
+                time_offset_spin.setEnabled(False)
+                t_offset = -var_list.time_range[0]
+                # Update spinbox to reflect the change, without emitting a new signal
+                time_offset_spin.blockSignals(True)
+                time_offset_spin.setValue(t_offset)
+                time_offset_spin.blockSignals(False)
+                var_list.set_time_offset(t_offset)
+            else:
+                # Re-enable spin box
+                time_offset_spin.setEnabled(True)
+                var_list.set_time_offset(time_offset_spin.value())
+
+        # Connect signals
+        time_offset_spin.valueChanged.connect(update_offset)
+        start_zero_check_box.stateChanged.connect(update_offset)
+
+        def restore_initial_offset():
+            # This function will be called whenever the dialog is rejected.
+            var_list.set_time_offset(initial_offset)
+
+        # Connect the dialog's buttons to its standard slots.
         button_box.accepted.connect(time_offset_dialog.accept)
         button_box.rejected.connect(time_offset_dialog.reject)
 
-        # Show the dialog as modal
-        if time_offset_dialog.exec() == QDialog.Accepted:
-            if start_zero_check_box.isChecked():
-                t_offset = -var_list.time_range[0]
-            else:
-                t_offset = time_offset_spin.value()
+        # Connect the dialog's rejected signal to restore the original state.
+        # This handles both clicking the "Cancel" button and closing the window.
+        time_offset_dialog.rejected.connect(restore_initial_offset)
 
-            var_list.set_time_offset(t_offset)
-        # If user cancels, nothing changes.
+        # Show the dialog
+        time_offset_dialog.show()
 
 
 class FileLoader:
@@ -248,6 +280,7 @@ class FileLoader:
         self._time = None
         self._df = None
         self._supervisor_log = False
+        self.time_offset = 0.0
 
     @property
     def success(self):
@@ -334,6 +367,10 @@ def time_selector_dialog(caller, df):
     hbox.addStretch()
     form.addRow("Create time variable:", hbox)
 
+    start_zero_check_box = QCheckBox("Start time at 0")
+    start_zero_check_box.setToolTip("If checked, the time vector will be offset so that it starts at 0.")
+    form.addRow(start_zero_check_box)
+
     # Add some standard buttons (Cancel/Ok) at the bottom of the dialog
     button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
                                   Qt.Horizontal, dialog)
@@ -358,9 +395,12 @@ def time_selector_dialog(caller, df):
                 QMessageBox.warning(caller, "Non-monotonic time variable",
                                     f"WARNING: Selected time variable '{item}' (after scaling) is not " +
                                     "monotonically increasing!")
-        return True, time
+        time_offset = 0.0
+        if start_zero_check_box.isChecked():
+            time_offset = -time.iloc[0]
+        return True, time, time_offset
     else:
-        return False, None
+        return False, None, 0.0
 
 
 def _is_supervisor_log(filename, df):
@@ -382,9 +422,10 @@ class BinaryFileLoader(FileLoader):
 
         except KeyError:
             # Log file doesn't have one of the expected time variables, so ask the user to pick one.
-            ok, time = time_selector_dialog(caller, self._df)
+            ok, time, offset = time_selector_dialog(caller, self._df)
             if ok:
                 self._time = time
+                self.time_offset = offset
             else:
                 QMessageBox.critical(caller, "Unable to load .bin file",
                                      "No time series selected. Unable to finish loading data.")
@@ -416,9 +457,10 @@ class GenericCSVLoader(FileLoader):
                 self._time = self._df['time_ns'].astype(np.float64, copy=True) * 1e-9
         except KeyError:
             # Ask the user which column to use for time
-            ok, time = time_selector_dialog(caller, self._df)
+            ok, time, offset = time_selector_dialog(caller, self._df)
             if ok:
                 self._time = time
+                self.time_offset = offset
             else:
                 QMessageBox.critical(caller, "Unable to load file",
                                      "No time series selected. Unable to finish loading data.")
@@ -436,9 +478,10 @@ class ParquetLoader(FileLoader):
                 self._time = self._df['time']
             except KeyError:
                 # Parquet log doesn't have one of the expected time variables, so ask the user for one.
-                ok, time = time_selector_dialog(caller, self._df)
+                ok, time, offset = time_selector_dialog(caller, self._df)
                 if ok:
                     self._time = time
+                    self.time_offset = offset
                 else:
                     QMessageBox.critical(caller, "Unable to load parquet file",
                                                  "No time series selected. Unable to finish loading data.")
