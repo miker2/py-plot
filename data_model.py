@@ -69,6 +69,8 @@ class DataModel(QAbstractListModel):
         logger.info(f"Loaded {data_loader.source} which has a dt of {self._avg_dt:.6f} sec and a sampling rate of {freq} Hz")
 
         self._time_offset = 0
+        self._current_tick = 0
+        self._show_values = False
 
     @property
     def time(self):
@@ -103,16 +105,33 @@ class DataModel(QAbstractListModel):
     def set_time_offset(self, time_offset):
         self._time_offset = time_offset
 
+    def set_current_tick(self, tick):
+        self._current_tick = tick
+
+    def set_show_values(self, show):
+        self._show_values = show
+
     def rowCount(self, parent=QModelIndex()):
         return len(self._data)
 
     def data(self, index, role):
         if role == Qt.DisplayRole:
             item = self._data[index.row()]
-            return QVariant(item.var_name)
+            var_name = item.var_name
+
+            if self._show_values and not isinstance(item, SeparatorItem):
+                try:
+                    value = item.data[self._current_tick]
+                    if isinstance(value, (float, np.floating)):
+                        display_text = f"{var_name}: {value:.4f}"
+                    else:
+                        display_text = f"{var_name}: {value}"
+                    return QVariant(display_text)
+                except IndexError:
+                    return QVariant(f"{var_name}: N/A")
+
+            return QVariant(var_name)
         elif role == Qt.UserRole:
-            # print(type(index))
-            # print(type(index.row()))
             return self._data[index.row()]
         elif role == Qt.ForegroundRole:
             item = self._data[index.row()]

@@ -59,6 +59,14 @@ class VarListWidget(QListView):
         self.model().set_time_offset(time_offset)
         self.timeChanged.emit()
 
+    def set_show_values(self, show):
+        self.model().set_show_values(show)
+        self.model().layoutChanged.emit()
+
+    def update_tick(self, tick):
+        self.model().set_current_tick(tick)
+        self.model().layoutChanged.emit()
+
     def close(self):
         self.onClose.emit()
         return super().close()
