@@ -218,6 +218,7 @@ class DataFileWidget(QWidget):
         time_offset_dialog.setModal(False)  # Make it non-modal
 
         form = QFormLayout(time_offset_dialog)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
         # Add manual user input dialog box
         time_offset_spin = QDoubleSpinBox()
