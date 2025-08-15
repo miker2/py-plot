@@ -104,7 +104,14 @@ class DataFileWidget(QWidget):
         # Set callback in the model so it can update the checkbox
         var_list.model()._checkbox_update_callback = update_checkbox_state
 
-        tab_layout.addWidget(derived_checkbox)
+        checkbox_layout = QHBoxLayout()
+        checkbox_layout.addWidget(derived_checkbox)
+
+        show_values_checkbox = QCheckBox("Show values")
+        show_values_checkbox.toggled.connect(var_list.set_show_values)
+        checkbox_layout.addWidget(show_values_checkbox)
+
+        tab_layout.addLayout(checkbox_layout)
         tab_layout.addWidget(var_list)
 
         tab_name = os.path.basename(filepath)
@@ -157,6 +164,11 @@ class DataFileWidget(QWidget):
         if self.tabs.count() == 0:
             return None
         return self.get_data_file(idx).time
+
+    def update_tick(self, tick):
+        active_widget = self.get_active_data_file()
+        if active_widget:
+            active_widget.update_tick(tick)
 
     @pyqtSlot(QPoint)
     def on_context_menu_request(self, pos):

@@ -107,6 +107,7 @@ class PyPlot(QMainWindow):
         tick_time_indicator = TimeTickWidget()
         self.plot_manager.tickValueChanged.connect(tick_time_indicator.update_tick)
         self.plot_manager.timeValueChanged.connect(tick_time_indicator.update_time)
+        self.plot_manager.tickValueChanged.connect(self.data_file_widget.update_tick)
         self.statusBar().addPermanentWidget(tick_time_indicator)
 
         self._settings = QSettings()
